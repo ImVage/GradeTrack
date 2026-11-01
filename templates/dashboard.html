@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GradeTrack · Notentracker für Studenten</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --dhbw-red: #E2001A;
+      --dhbw-red-dark: #B50014;
+      --dhbw-gray: #5C6971;
+      --dhbw-charcoal: #14171A;
+      --bg-canvas: #F3F4F6;
+      --card-bg: #FFFFFF;
+      --border-subtle: #E6E8EC;
+      --text-muted: #7C8792;
+    }
+    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+    body {
+      margin: 0;
+      background: var(--bg-canvas);
+      color: var(--dhbw-charcoal);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app-shell {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 20px 32px 60px;
+    }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0 22px;
+      gap: 20px;
+    }
+    .brand-cluster {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .brand-cluster img {
+      height: 38px;
+      width: auto;
+    }
+    .brand-divider {
+      width: 1px;
+      height: 22px;
+      background: #D5D9DF;
+    }
+    .brand-name {
+      font-weight: 800;
+      font-size: 16.5px;
+      letter-spacing: -0.02em;
+      color: var(--dhbw-charcoal);
+    }
+
+    /* Echte Tab-Navigation */
+    .nav-pills {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.85);
+      border: 1px solid var(--border-subtle);
+      padding: 5px;
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+    }
+    .nav-pills a {
+      text-decoration: none;
+      color: var(--dhbw-gray);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 999px;
+      transition: all .15s ease;
+      cursor: pointer;
+    }
+    .nav-pills a:hover { color: var(--dhbw-charcoal); }
+    .nav-pills a.active {
+      background: var(--dhbw-charcoal);
+      color: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+
+    .user-cluster {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .role-tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 6px 11px;
+      border-radius: 999px;
+    }
+    .role-tag.registrar {
+      background: rgba(226, 0, 26, 0.12);
+      color: var(--dhbw-red);
+    }
+    .role-tag.student {
+      background: #E5E9EC;
+      color: var(--dhbw-gray);
+    }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      padding: 5px 14px 5px 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--dhbw-red);
+      color: #FFF;
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 0.02em;
+    }
+    .logout-btn {
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--dhbw-gray);
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: #FFFFFF;
+      transition: all .15s ease;
+    }
+    .logout-btn:hover { color: var(--dhbw-red); border-color: var(--dhbw-red); }
+
+    /* Hero-Zeile */
+    .hero-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 4px 0 22px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .hero-title h1 {
+      margin: 0;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--dhbw-charcoal);
+    }
+
+    .period-filter {
+      display: flex;
+      align-items: center;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      padding: 5px 6px;
+      gap: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+    .filter-select-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+    }
+    .filter-select-wrap svg {
+      width: 14px;
+      height: 14px;
+      color: var(--dhbw-gray);
+      flex-shrink: 0;
+    }
+    .period-filter select {
+      border: 0;
+      background: transparent;
+      padding: 6px 4px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--dhbw-charcoal);
+      outline: none;
+      cursor: pointer;
+    }
+    .period-filter .compare-tag {
+      background: #F3F4F6;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 999px;
+    }
+    .period-filter button {
+      background: var(--dhbw-charcoal);
+      color: #FFFFFF;
+      border: 0;
+      border-radius: 999px;
+      padding: 7px 15px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .period-filter button:hover { background: var(--dhbw-red); }
+    .period-filter a.reset-pill {
+      text-decoration: none;
+      color: var(--dhbw-gray);
+      background: #F3F4F6;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 999px;
+    }
+    .period-filter a.reset-pill:hover { color: var(--dhbw-red); }
+
+    /* KPI-Leiste */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 20px 22px;
+      box-shadow: 0 4px 18px rgba(17, 24, 39, 0.03);
+    }
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--dhbw-charcoal);
+      line-height: 1.05;
+    }
+    .kpi-value small {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dhbw-red);
+      margin-left: 4px;
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Grids */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 2.15fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .two-col-equal {
+      display: grid;
+      grid-template-columns: 1.1fr 1.4fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .bento-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-subtle);
+      border-radius: 22px;
+      padding: 24px 26px;
+      box-shadow: 0 4px 20px rgba(17, 24, 39, 0.03);
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .card-head h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-pill {
+      padding: 5px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: #F9FAFB;
+      color: var(--dhbw-gray);
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* Tabellen */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 8px;
+      border-bottom: 1px solid #F0F2F5;
+      vertical-align: middle;
+    }
+    th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .status-pill.approved {
+      background: #ECFDF5;
+      color: #047857;
+    }
+    .status-pill.pending {
+      background: #FEF3C7;
+      color: #B45309;
+    }
+    .grade-badge {
+      display: inline-block;
+      min-width: 38px;
+      text-align: center;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-weight: 800;
+      background: #F3F4F6;
+      color: var(--dhbw-charcoal);
+    }
+    .grade-badge.fail {
+      background: #FEE2E2;
+      color: var(--dhbw-red);
+    }
+
+    .action-row { display: flex; gap: 6px; }
+    .btn-sm {
+      border: 0;
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-approve { background: #10B981; color: #FFF; }
+    .btn-approve:hover { background: #059669; }
+    .btn-delete { background: #FEE2E2; color: var(--dhbw-red); }
+    .btn-delete:hover { background: var(--dhbw-red); color: #FFF; }
+
+    /* Suchleiste im Modulkatalog */
+    .catalog-search {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .catalog-search input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: #F9FAFB;
+      font-size: 13px;
+      outline: none;
+    }
+    .catalog-search input:focus {
+      border-color: var(--dhbw-red);
+      background: #FFFFFF;
+    }
+    .catalog-search button {
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: 0;
+      background: var(--dhbw-charcoal);
+      color: #FFF;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .catalog-search button:hover { background: var(--dhbw-red); }
+
+    /* Formulare */
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .form-field { margin-bottom: 13px; }
+    .form-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--dhbw-gray);
+      margin-bottom: 6px;
+    }
+    .form-field input, .form-field select {
+      width: 100%;
+      padding: 10px 13px;
+      border-radius: 11px;
+      border: 1px solid var(--border-subtle);
+      background: #F9FAFB;
+      font-size: 13.5px;
+      color: var(--dhbw-charcoal);
+      outline: none;
+    }
+    .form-field input:focus, .form-field select:focus {
+      border-color: var(--dhbw-red);
+      background: #FFFFFF;
+    }
+    .btn-primary-full {
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--dhbw-red);
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 13.5px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(226, 0, 26, 0.22);
+    }
+    .btn-primary-full:hover { background: var(--dhbw-red-dark); }
+
+    /* Semester-Fortschrittsbalken */
+    .progress-item { margin-bottom: 15px; }
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--dhbw-gray);
+      margin-bottom: 6px;
+    }
+    .progress-track {
+      height: 10px;
+      border-radius: 999px;
+      background: #EEF0F3;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--dhbw-red),
+        var(--dhbw-red) 5px,
+        #FF475C 5px,
+        #FF475C 10px
+      );
+    }
+    .progress-fill.gray {
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--dhbw-gray),
+        var(--dhbw-gray) 5px,
+        #7B8892 5px,
+        #7B8892 10px
+      );
+    }
+    .progress-fill.green {
+      background: repeating-linear-gradient(
+        -45deg,
+        #10B981,
+        #10B981 5px,
+        #34D399 5px,
+        #34D399 10px
+      );
+    }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .flash {
+      padding: 12px 18px;
+      border-radius: 14px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+    }
+    .flash.error { border-color: #FCA5A5; background: #FEF2F2; color: #B91C1C; }
+    .flash.success { border-color: #A7F3D0; background: #ECFDF5; color: #065F46; }
+
+    @media (max-width: 1024px) {
+      .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+      .overview-grid, .two-col-equal { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Topbar mit echten Ansichts-Tabs -->
+    <header class="topbar">
+      <a href="/?tab=overview" class="brand-cluster">
+        <img src="/static/img/dhbw-logo.png" alt="DHBW Mannheim">
+        <span class="brand-divider"></span>
+        <span class="brand-name">gradetrack</span>
+      </a>
+
+      <nav class="nav-pills">
+        <a data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}" onclick="switchTab('overview')">Notenübersicht</a>
+        <a data-tab="add" class="{{ 'active' if active_tab == 'add' else '' }}" onclick="switchTab('add')">Prüfung eintragen</a>
+        <a data-tab="modules" class="{{ 'active' if active_tab == 'modules' else '' }}" onclick="switchTab('modules')">Modulkatalog</a>
+        {% if user.role == 'registrar' %}
+          <a data-tab="users" class="{{ 'active' if active_tab == 'users' else '' }}" onclick="switchTab('users')">Benutzerverwaltung</a>
+        {% endif %}
+      </nav>
+
+      <div class="user-cluster">
+        <span class="role-tag {{ user.role }}">
+          {{ "Prüfungsamt" if user.role == "registrar" else "Studierende/r" }}
+        </span>
+        <div class="user-pill">
+          <span class="user-avatar">{{ user_initials }}</span>
+          <span>{{ user.full_name or user.username }}</span>
+        </div>
+        <a href="/logout" class="logout-btn">Abmelden</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message|safe }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- ==================== TAB 1: NOTENÜBERSICHT ==================== -->
+    <section id="tab-overview" class="tab-pane {{ 'active' if active_tab == 'overview' else '' }}">
+      <div class="hero-bar">
+        <div class="hero-title">
+          <h1>Notenübersicht</h1>
+        </div>
+
+        <form method="get" action="/" class="period-filter">
+          <input type="hidden" name="tab" value="overview">
+          {% if user.role == 'registrar' %}
+            <div class="filter-select-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 14.5-4 16 0"/>
+              </svg>
+              <select name="student_id">
+                <option value="">Alle Studierenden</option>
+                {% for s in students if s.role == 'student' %}
+                  <option value="{{ s.id }}" {% if filters.student_id == (s.id|string) %}selected{% endif %}>
+                    {{ s.full_name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <span class="compare-tag">gefiltert nach</span>
+          {% endif %}
+
+          <div class="filter-select-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+            </svg>
+            <select name="semester">
+              <option value="">Alle Semester</option>
+              <option value="1" {% if filters.semester == '1' %}selected{% endif %}>1. Semester</option>
+              <option value="2" {% if filters.semester == '2' %}selected{% endif %}>2. Semester</option>
+              <option value="3" {% if filters.semester == '3' %}selected{% endif %}>3. Semester</option>
+            </select>
+          </div>
+
+          <div class="filter-select-wrap">
+            <select name="status">
+              <option value="">Status: Alle</option>
+              <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>Bestätigt (approved)</option>
+              <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>Offen (pending)</option>
+            </select>
+          </div>
+
+          <button type="submit">Filtern</button>
+          <a href="/?tab=overview" class="reset-pill">Reset</a>
+        </form>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-card">
+          <div class="kpi-label">Gewichteter Notenschnitt</div>
+          <div class="kpi-value">Ø {{ stats.average if stats.total_ects else "–" }}</div>
+          <div class="kpi-sub">Berechnet nach ECTS-Gewichtung</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Erreichte ECTS-Punkte</div>
+          <div class="kpi-value">{{ stats.total_ects }}<small>/ 180 ECTS</small></div>
+          <div class="kpi-sub">{{ stats.approved_ects }} ECTS offiziell bestätigt</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Bestandene Klausuren</div>
+          <div class="kpi-value">{{ stats.passed }}<small>von {{ stats.exams }}</small></div>
+          <div class="kpi-sub">{{ stats.failed }} nicht bestanden (Note 5.0)</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Prüfungsamt-Status</div>
+          <div class="kpi-value">{{ stats.approved }}<small>bestätigt</small></div>
+          <div class="kpi-sub">{{ stats.pending }} Eintrag/Einträge noch offen</div>
+        </div>
+      </div>
+
+      <div class="overview-grid">
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>Klausuren &amp; Leistungsnachweise ({{ grades|length }})</h2>
+            <div class="head-actions">
+              <span class="card-pill">{{ "Prüfungsamt-Modus" if user.role == "registrar" else "Meine Prüfungen" }}</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                {% if user.role == 'registrar' %}<th>Studierende/r</th>{% endif %}
+                <th>Modul</th>
+                <th>Sem.</th>
+                <th>ECTS</th>
+                <th>Note</th>
+                <th>Kommentar</th>
+                <th>Status</th>
+                {% if user.role == 'registrar' %}<th>Prüfungsamt</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for g in grades %}
+                <tr>
+                  <td style="color:var(--text-muted);font-weight:700">#{{ g.id }}</td>
+                  {% if user.role == 'registrar' %}
+                    <td><strong>{{ g.student_full_name or g.student_name or g.student_id }}</strong></td>
+                  {% endif %}
+                  <td>
+                    <strong>{{ g.module_code }}</strong>
+                    <div style="font-size:11.5px;color:var(--text-muted)">{{ g.module_title or 'Nicht im Katalog' }}</div>
+                  </td>
+                  <td>Sem. {{ g.semester }}</td>
+                  <td><strong>{{ g.ects }}</strong> ECTS</td>
+                  <td>
+                    <span class="grade-badge {% if g.grade > 4.0 %}fail{% endif %}">{{ g.grade }}</span>
+                  </td>
+                  <td>{{ g.comment|safe }}</td>
+                  <td>
+                    <span class="status-pill {{ g.status }}">
+                      {{ "✓ approved" if g.status == "approved" else "⏳ pending" }}
+                    </span>
+                  </td>
+                  {% if user.role == 'registrar' %}
+                    <td>
+                      <div class="action-row">
+                        {% if g.status != 'approved' %}
+                          <form method="post" action="/ui/grades/{{ g.id }}/approve" style="margin:0">
+                            <button type="submit" class="btn-sm btn-approve">Bestätigen</button>
+                          </form>
+                        {% endif %}
+                        <form method="post" action="/ui/grades/{{ g.id }}/delete" style="margin:0">
+                          <button type="submit" class="btn-sm btn-delete">Löschen</button>
+                        </form>
+                      </div>
+                    </td>
+                  {% endif %}
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="9" style="text-align:center;color:var(--text-muted);padding:28px">
+                    Keine Prüfungsleistungen für diesen Filter vorhanden.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>ECTS nach Semester</h2>
+            <span class="card-pill">{{ stats.total_ects }} ECTS gesamt</span>
+          </div>
+
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>1. Semester</span>
+              <span>{{ stats.sem_ects.get(1, 0) }} / 30 ECTS</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill green" style="width: {{ [(stats.sem_ects.get(1, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+            </div>
+          </div>
+
+          <div class="progress-item">
+            <div class="progress-head">
+              <span>2. Semester</span>
+              <span>{{ stats.sem_ects.get(2, 0) }} / 30 ECTS</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill gray" style="width: {{ [(stats.sem_ects.get(2, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+            </div>
+          </div>
+
+          <div class="progress-item" style="margin-bottom:22px">
+            <div class="progress-head">
+              <span>3. Semester</span>
+              <span>{{ stats.sem_ects.get(3, 0) }} / 30 ECTS</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: {{ [(stats.sem_ects.get(3, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+            </div>
+          </div>
+
+          <button type="button" class="btn-primary-full" onclick="switchTab('add')">+ Neue Prüfung eintragen</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: PRÜFUNG EINTRAGEN ==================== -->
+    <section id="tab-add" class="tab-pane {{ 'active' if active_tab == 'add' else '' }}">
+      <div class="hero-bar">
+        <div class="hero-title">
+          <h1>Prüfung eintragen</h1>
+        </div>
+      </div>
+
+      <div class="two-col-equal">
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>Neue Prüfungsleistung erfassen</h2>
+            <span class="card-pill">Status: pending</span>
+          </div>
+
+          <form method="post" action="/ui/grades/add">
+            {% if user.role == 'registrar' %}
+              <div class="form-field">
+                <label>Studierende/r</label>
+                <select name="student_id">
+                  {% for s in students if s.role == 'student' %}
+                    <option value="{{ s.id }}">{{ s.full_name }} ({{ s.username }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+
+            <div class="form-field">
+              <label>Modul aus Katalog</label>
+              <select name="module_code" id="moduleSelect" onchange="syncModule(this)">
+                {% for m in modules %}
+                  <option value="{{ m.code }}" data-ects="{{ m.ects }}" data-sem="{{ m.semester }}">
+                    {{ m.code }} · {{ m.title }} ({{ m.ects }} ECTS)
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label>Note (1.0 – 5.0)</label>
+                <input type="number" step="0.1" name="grade" value="1.3" required>
+              </div>
+              <div class="form-field">
+                <label>ECTS-Punkte</label>
+                <input type="number" name="ects" id="ectsInput" value="{{ modules[0].ects if modules else 5 }}" required>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label>Fachsemester</label>
+                <input type="number" name="semester" id="semInput" value="{{ modules[0].semester if modules else 3 }}" required>
+              </div>
+              <div class="form-field">
+                <label>Prüfungsdatum</label>
+                <input type="date" name="exam_date" value="2026-11-01">
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label>Kommentar / Prüfungsnotiz</label>
+              <input type="text" name="comment" placeholder="z. B. Prüfungsleistung WS 26/27">
+            </div>
+
+            <button type="submit" class="btn-primary-full">Prüfung speichern</button>
+          </form>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>Zuletzt eingetragene Noten</h2>
+            <span class="card-pill">{{ grades|length }} gesamt</span>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Modul</th><th>Sem.</th><th>ECTS</th><th>Note</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {% for g in grades[:6] %}
+                <tr>
+                  <td><strong>{{ g.module_code }}</strong></td>
+                  <td>Sem. {{ g.semester }}</td>
+                  <td>{{ g.ects }} ECTS</td>
+                  <td><span class="grade-badge {% if g.grade > 4.0 %}fail{% endif %}">{{ g.grade }}</span></td>
+                  <td><span class="status-pill {{ g.status }}">{{ g.status }}</span></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: MODULKATALOG ==================== -->
+    <section id="tab-modules" class="tab-pane {{ 'active' if active_tab == 'modules' else '' }}">
+      <div class="hero-bar">
+        <div class="hero-title">
+          <h1>DHBW Modulkatalog</h1>
+        </div>
+      </div>
+
+      <div class="two-col-equal">
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>Neues Modul im Katalog anlegen</h2>
+            <span class="card-pill">Katalog</span>
+          </div>
+          <form method="post" action="/ui/modules/add">
+            <div class="form-field">
+              <label>Modulcode</label>
+              <input type="text" name="code" placeholder="z. B. INF-3005" required>
+            </div>
+            <div class="form-field">
+              <label>Vorlesungstitel</label>
+              <input type="text" name="title" placeholder="z. B. Cloud Security" required>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label>ECTS-Punkte</label>
+                <input type="number" name="ects" value="5" required>
+              </div>
+              <div class="form-field">
+                <label>Regelsemester</label>
+                <input type="number" name="semester" value="3" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary-full">+ Modul hinzufügen</button>
+          </form>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-head">
+            <h2>Hinterlegte Module ({{ modules|length }})</h2>
+            <div class="head-actions">
+              {% if filters.search %}
+                <span class="card-pill">Suche: {{ filters.search|safe }}</span>
+                <a href="/?tab=modules" class="card-pill" style="text-decoration:none;color:var(--dhbw-red)">✕ Reset</a>
+              {% endif %}
+            </div>
+          </div>
+
+          <form method="get" action="/" class="catalog-search">
+            <input type="hidden" name="tab" value="modules">
+            <input type="text" name="search" value="{{ filters.search }}" placeholder="Modulcode oder Vorlesung suchen (z. B. INF-3002 oder Security) ...">
+            <button type="submit">Suchen</button>
+          </form>
+
+          <table>
+            <thead>
+              <tr><th>Modulcode</th><th>Vorlesung</th><th>ECTS</th><th>Regelsemester</th></tr>
+            </thead>
+            <tbody>
+              {% for m in modules %}
+                <tr>
+                  <td><strong style="color:var(--dhbw-red)">{{ m.code }}</strong></td>
+                  <td><strong>{{ m.title }}</strong></td>
+                  <td>{{ m.ects }} ECTS</td>
+                  <td>{{ m.semester }}. Semester</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: BENUTZERVERWALTUNG (PRÜFUNGSAMT) ==================== -->
+    {% if user.role == 'registrar' %}
+      <section id="tab-users" class="tab-pane {{ 'active' if active_tab == 'users' else '' }}">
+        <div class="hero-bar">
+          <div class="hero-title">
+            <h1>Benutzerverwaltung</h1>
+          </div>
+        </div>
+
+        <div class="two-col-equal">
+          <div class="bento-card">
+            <div class="card-head">
+              <h2>Neuen Account anlegen</h2>
+              <span class="card-pill">Prüfungsamt</span>
+            </div>
+            <form method="post" action="/ui/users/add">
+              <div class="form-field">
+                <label>Vollständiger Name</label>
+                <input type="text" name="full_name" placeholder="z. B. Max Mustermann" required>
+              </div>
+              <div class="form-grid-2">
+                <div class="form-field">
+                  <label>Benutzername</label>
+                  <input type="text" name="username" placeholder="max" required>
+                </div>
+                <div class="form-field">
+                  <label>Initial-Passwort</label>
+                  <input type="text" name="password" value="start123" required>
+                </div>
+              </div>
+              <div class="form-field">
+                <label>Rolle</label>
+                <select name="role">
+                  <option value="student">student</option>
+                  <option value="registrar">registrar (Prüfungsamt)</option>
+                </select>
+              </div>
+              <button type="submit" class="btn-primary-full">Benutzer erstellen</button>
+            </form>
+          </div>
+
+          <div class="bento-card">
+            <div class="card-head">
+              <h2>Registrierte Benutzer ({{ students|length }})</h2>
+            </div>
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Benutzername</th><th>Rolle</th></tr>
+              </thead>
+              <tbody>
+                {% for s in students %}
+                  <tr>
+                    <td>#{{ s.id }}</td>
+                    <td><strong>{{ s.full_name }}</strong></td>
+                    <td><code>{{ s.username }}</code></td>
+                    <td><span class="role-tag {{ s.role }}">{{ s.role }}</span></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+
+  <script>
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-pills a').forEach(el => el.classList.remove('active'));
+      const pane = document.getElementById('tab-' + tabName);
+      const link = document.querySelector('.nav-pills a[data-tab="' + tabName + '"]');
+      if (pane) pane.classList.add('active');
+      if (link) link.classList.add('active');
+      const url = new URL(window.location);
+      url.searchParams.set('tab', tabName);
+      window.history.replaceState({}, '', url);
+    }
+
+    function syncModule(sel) {
+      const opt = sel.options[sel.selectedIndex];
+      if (!opt) return;
+      document.getElementById('ectsInput').value = opt.dataset.ects || 5;
+      document.getElementById('semInput').value = opt.dataset.sem || 1;
+    }
+  </script>
+</body>
+</html>
