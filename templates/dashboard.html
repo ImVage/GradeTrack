@@ -610,6 +610,8 @@
         </form>
       </div>
 
+      {% if user.role != 'registrar' %}
+
       <div class="kpi-strip">
         <div class="kpi-card">
           <div class="kpi-label">Gewichteter Notenschnitt</div>
@@ -636,6 +638,7 @@
         </div>
       </div>
 
+      {% endif %}
       <div class="overview-grid">
         <div class="bento-card">
           <div class="card-head">
