@@ -42,6 +42,10 @@ DevSecOps-Maßnahmen sinnvoll eingerichtet und begründet werden.
 - **Passwörter und API-Tokens**,
 - die **personenbezogenen Daten** der Studierenden.
 
+Das ausführliche Schutzkonzept mit allen Nachweisen folgt in
+[`docs/schutzkonzept.md`](docs/schutzkonzept.md).
+
+
 ## Rollen
 
 | Rolle | Darf |
@@ -186,25 +190,10 @@ bearbeiten (*Menü → Öffnen*), denn die Szene ist in der SVG eingebettet.
 
 ## Mitarbeiten
 
-- `main` ist der stabile, abgesicherte Stand. Änderungen kommen nur per **Pull Request**.
+- `main` ist der stabile, abgesicherte Stand - enforced durch Ruleset. Änderungen kommen nur per **Pull Request**.
 - `vulnerable` friert den unsicheren Ausgangsstand für Positivtests ein und wird **nie**
   gemergt.
 - Commit-Nachrichten folgen [Conventional Commits](https://www.conventionalcommits.org/de/),
   z. B. `fix: SQL-Injection in /grades behoben` oder `docs: Schutzkonzept Feld 2`.
 
 ---
-
-## Prüfungsleistung: Stand
-
-**Vertiefungen:** Code Security (Feld 2) und Dynamisches Testing (Feld 5)
-
-| Feld | Umfang | Status | Nachweis |
-|---|---|---|---|
-| 1. Building von Artefakten | Mindestmaß | ⏳ geplant | – |
-| 2. Code Security | **Vertiefung** | ⏳ geplant | – |
-| 3. Build & Supply Chain | Mindestmaß | 🔄 in Arbeit | `requirements.txt` (Lock-File mit Hashes) |
-| 4. Logging & Betrieb | Mindestmaß | ⏳ geplant | – |
-| 5. Dynamisches Testing | **Vertiefung** | ⏳ geplant | – |
-
-Das ausführliche Schutzkonzept mit allen Nachweisen folgt in
-[`docs/schutzkonzept.md`](docs/schutzkonzept.md).
