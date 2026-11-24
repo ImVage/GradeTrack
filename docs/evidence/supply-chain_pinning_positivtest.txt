@@ -1,0 +1,9 @@
+Positivtest: check-pinning.sh erkennt ungepinnte Action und ungepinntes Docker-Image
+Datum: 2026-11-24
+Testaufbau: setup-python auf @v7 zurückgesetzt, Dockerfile mit 'FROM python:3.12-slim'
+
+$ bash scripts/check-pinning.sh
+::error::Action nicht per Commit-SHA gepinnt: .github/workflows/supply-chain.yml:40:        uses: actions/setup-python@v7
+::error::Image nicht per Digest gepinnt: ./Dockerfile:1:FROM python:3.12-slim
+Pinning-Prüfung fehlgeschlagen.
+Exit-Code: 1
