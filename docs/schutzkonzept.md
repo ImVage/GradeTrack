@@ -62,7 +62,7 @@ Ausgangsstand (Branch `vulnerable`), dass es ein echtes Problem findet.
 
 - [x] *(Immer Pflicht)* Genutzte Software-Versionen werden mit Release-Tag und Prüfsumme
   oder Commit-Hash referenziert.
-- [ ] Eine SBOM wird automatisiert erzeugt und ist im oder über das Repository vorzeigbar.
+- [x] Eine SBOM wird automatisiert erzeugt und ist im oder über das Repository vorzeigbar.
 - [x] Abhängigkeiten werden auf bekannte Sicherheitslücken geprüft.
 - [ ] Ein Werkzeug unterstützt on-demand den automatisierten Update-Prozess von
   Abhängigkeiten.
@@ -77,7 +77,16 @@ gemacht haben. Ohne feste Versionen weiß außerdem niemand genau, was installie
 Lock-File `requirements.txt` und werden nur mit Hash-Prüfung installiert. Ein nachträglich
 verändertes Paket fällt so sofort auf. Das Docker-Base-Image pinnen wir per Digest und die
 GitHub Actions per Commit-SHA. Zusätzlich prüft die CI unsere Abhängigkeiten auf bekannte
-Sicherheitslücken.
+Sicherheitslücken und erzeugt eine SBOM, die genau auflistet, welche Pakete in welcher
+Version in GradeTrack stecken.
+
+**Umsetzung und Nachweise:**
+
+| Kriterium | Umsetzung | Nachweis |
+|---|---|---|
+| Versionen mit Prüfsumme/Commit-Hash | `requirements.txt` und `requirements-dev.txt` mit SHA-256, Installation mit `--require-hashes`; Actions per Commit-SHA, Release-Tag im Schrittnamen; [`scripts/check-pinning.sh`](../scripts/check-pinning.sh) erzwingt das in der CI | [Positivtest Pinning](evidence/supply-chain_pinning_positivtest.txt) |
+| Prüfung auf bekannte Lücken | `pip-audit` im Workflow [`supply-chain.yml`](../.github/workflows/supply-chain.yml), bei Push/PR auf `main`, wöchentlich und manuell; ein Fund lässt den Lauf fehlschlagen | [Lauf auf `main`](evidence/supply-chain_pip-audit_main.txt), [Positivtest mit veralteten Versionen](evidence/supply-chain_pip-audit_positivtest.txt) |
+| SBOM automatisiert erzeugt | `cyclonedx-py` erzeugt im selben Workflow aus `requirements.txt` eine validierte CycloneDX-SBOM (JSON) und lädt sie als Artefakt `sbom` hoch | [Aktuelle SBOM](evidence/sbom.cdx.json), Artefakt `sbom` im letzten Lauf unter *Actions → Supply Chain* |
 
 ---
 

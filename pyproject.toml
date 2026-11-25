@@ -1,0 +1,10 @@
+[project]
+name = "gradetrack"
+version = "0.1.0"
+description = "Notenverwaltung für Studierende und Prüfungsamt: Flask-Web-App mit REST-API"
+requires-python = ">=3.12"
+authors = [
+  { name = "Tobias Gehrke" },
+  { name = "Pavel Kullmann" },
+  { name = "Anastasia Rotermel" },
+]

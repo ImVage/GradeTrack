@@ -166,6 +166,39 @@ python -m pip install pip-tools
 pip-compile --generate-hashes requirements.in
 ```
 
+Werkzeuge für die CI (`pip-audit`, `cyclonedx-bom`) stehen getrennt davon in `requirements-dev.in` und
+sind genauso mit Hashes in `requirements-dev.txt` festgeschrieben. Erzeugt wird die Datei ohne
+Kommentare:
+
+```bash
+pip-compile --generate-hashes --allow-unsafe --strip-extras --no-header --no-annotate \
+    -o requirements-dev.txt requirements-dev.in
+sed -i '/^#/d' requirements-dev.txt
+```
+
+### Supply Chain prüfen
+
+Der Workflow [`supply-chain.yml`](.github/workflows/supply-chain.yml) läuft bei jedem Push und
+Pull Request auf `main`, wöchentlich sowie manuell (*Actions → Supply Chain → Run workflow*):
+
+- **Pinning:** `scripts/check-pinning.sh` schlägt fehl, wenn eine GitHub Action nicht per
+  Commit-SHA oder ein Docker-Image nicht per Digest referenziert ist. Der zugehörige
+  Release-Tag jeder Action steht im Namen des jeweiligen Workflow-Schritts.
+- **Bekannte Sicherheitslücken:** `pip-audit` prüft alle Pakete aus `requirements.txt` gegen
+  die Python Packaging Advisory Database und schlägt bei einem Fund fehl.
+- **SBOM:** `cyclonedx-py` erzeugt aus `requirements.txt` eine Software-Stückliste im
+  CycloneDX-Format. Sie hängt an jedem Lauf als Artefakt `sbom`; eine aktuelle Kopie liegt in
+  [`docs/evidence/sbom.cdx.json`](docs/evidence/sbom.cdx.json).
+
+Lokal ausführen:
+
+```bash
+python -m pip install --require-hashes -r requirements-dev.txt
+pip-audit -r requirements.txt --require-hashes --disable-pip
+bash scripts/check-pinning.sh
+cyclonedx-py requirements requirements.txt --pyproject pyproject.toml --of JSON -o sbom.cdx.json
+```
+
 ---
 
 ## Projektstruktur
@@ -177,6 +210,9 @@ GradeTrack/
 ├── static/              # Bilder
 ├── requirements.in      # direkte Abhängigkeiten
 ├── requirements.txt     # Lock-File mit Versionen und Hashes (generiert)
+├── requirements-dev.*   # CI-Werkzeuge (pip-audit, cyclonedx-bom), mit Hashes
+├── pyproject.toml       # Projekt-Metadaten (Name/Version, u. a. für die SBOM)
+├── .github/workflows/   # CI: Supply Chain (Pinning, pip-audit, SBOM)
 ├── docs/
 │   ├── img/             # Diagramme (Excalidraw)
 │   └── evidence/        # Nachweise: Reports, Screenshots, CI-Läufe

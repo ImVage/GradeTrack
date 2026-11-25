@@ -1,0 +1,6 @@
+pip-audit gegen requirements.txt (Stand main)
+Datum: 2026-11-24, pip-audit 2.10.1, Python 3.12
+
+$ pip-audit -r requirements.txt --require-hashes --disable-pip
+No known vulnerabilities found
+Exit-Code: 0
