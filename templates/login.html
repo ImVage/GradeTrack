@@ -369,6 +369,7 @@
         {% endwith %}
 
         <form method="post" action="/login" id="loginForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="field-group">
             <label for="username">Benutzerkennung</label>
             <div class="pill-input">

@@ -1,7 +1,18 @@
+import re
+
+
+def csrf_token(client):
+    seite = client.get("/login").get_data(as_text=True)
+    return re.search(r'name="csrf_token" value="([^"]+)"', seite).group(1)
+
+
 def test_web_login_mit_richtigen_daten_fuehrt_zum_dashboard(client, zugangsdaten):
     benutzername, passwort = zugangsdaten["student"]
 
-    antwort = client.post("/login", data={"username": benutzername, "password": passwort})
+    antwort = client.post(
+        "/login",
+        data={"username": benutzername, "password": passwort, "csrf_token": csrf_token(client)},
+    )
 
     assert antwort.status_code == 302
     assert antwort.headers["Location"] == "/"
@@ -10,12 +21,15 @@ def test_web_login_mit_richtigen_daten_fuehrt_zum_dashboard(client, zugangsdaten
 
 def test_web_login_mit_falschem_passwort_meldet_nicht_an(client, zugangsdaten):
     benutzername, _ = zugangsdaten["student"]
-    client.post("/login", data={"username": benutzername, "password": "falsch"})
 
-    antwort = client.get("/")
+    antwort = client.post(
+        "/login",
+        data={"username": benutzername, "password": "falsch", "csrf_token": csrf_token(client)},
+    )
 
     assert antwort.status_code == 302
     assert antwort.headers["Location"] == "/login"
+    assert client.get("/").headers["Location"] == "/login"
 
 
 def test_api_login_liefert_benutzer_und_rolle(client, zugangsdaten):

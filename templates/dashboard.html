@@ -689,10 +689,12 @@
                       <div class="action-row">
                         {% if g.status != 'approved' %}
                           <form method="post" action="/ui/grades/{{ g.id }}/approve" style="margin:0">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-sm btn-approve">Bestätigen</button>
                           </form>
                         {% endif %}
                         <form method="post" action="/ui/grades/{{ g.id }}/delete" style="margin:0">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                           <button type="submit" class="btn-sm btn-delete">Löschen</button>
                         </form>
                       </div>
@@ -767,6 +769,7 @@
           </div>
 
           <form method="post" action="/ui/grades/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if user.role == 'registrar' %}
               <div class="form-field">
                 <label>Studierende/r</label>
@@ -860,6 +863,7 @@
             <span class="card-pill">Katalog</span>
           </div>
           <form method="post" action="/ui/modules/add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-field">
               <label>Modulcode</label>
               <input type="text" name="code" placeholder="z. B. INF-3005" required>
@@ -934,6 +938,7 @@
               <span class="card-pill">Prüfungsamt</span>
             </div>
             <form method="post" action="/ui/users/add">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div class="form-field">
                 <label>Vollständiger Name</label>
                 <input type="text" name="full_name" placeholder="z. B. Max Mustermann" required>

@@ -20,6 +20,7 @@ try:
         session,
         url_for,
     )
+    from flask_wtf.csrf import CSRFProtect
     from werkzeug.exceptions import HTTPException
 except ImportError:
     print(
@@ -101,6 +102,7 @@ app.config.update(
     SECRET_KEY=SECRET_KEY,
     ADMIN_API_TOKEN=ADMIN_API_TOKEN,
 )
+csrf = CSRFProtect(app)
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +486,7 @@ def health():
 
 
 @app.post("/auth/login")
+@csrf.exempt
 def api_login():
     data = request.get_json() or {}
     user, error = authenticate_credentials(data.get("username", ""), data.get("password", ""))
@@ -503,6 +506,7 @@ def api_login():
 
 
 @app.post("/auth/logout")
+@csrf.exempt
 def api_logout():
     session.clear()
     return jsonify({"message": "Abgemeldet"})
@@ -540,6 +544,7 @@ def get_grade(grade_id):
 
 
 @app.post("/grades")
+@csrf.exempt
 @login_required
 def create_grade():
     data = request.get_json()
@@ -572,6 +577,7 @@ def create_grade():
 
 
 @app.put("/grades/<int:grade_id>")
+@csrf.exempt
 @login_required
 def update_grade(grade_id):
     data = request.get_json()
@@ -591,6 +597,7 @@ def update_grade(grade_id):
 
 
 @app.post("/grades/<int:grade_id>/approve")
+@csrf.exempt
 @registrar_required
 def approve_grade(grade_id):
     db = get_db()
@@ -606,6 +613,7 @@ def approve_grade(grade_id):
 
 
 @app.delete("/grades/<int:grade_id>")
+@csrf.exempt
 @registrar_required
 def delete_grade(grade_id):
     db = get_db()
@@ -625,6 +633,7 @@ def list_modules():
 
 
 @app.post("/modules")
+@csrf.exempt
 @login_required
 def create_module():
     data = request.get_json()
@@ -676,6 +685,7 @@ def list_users():
 
 
 @app.post("/users")
+@csrf.exempt
 @registrar_required
 def create_user():
     data = request.get_json()
