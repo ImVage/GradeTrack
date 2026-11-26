@@ -585,7 +585,7 @@ def update_grade(grade_id):
 
 
 @app.post("/grades/<int:grade_id>/approve")
-@registrar_required
+@login_required
 def approve_grade(grade_id):
     db = get_db()
     cur = db.execute(
