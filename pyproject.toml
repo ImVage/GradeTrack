@@ -8,3 +8,7 @@ authors = [
   { name = "Pavel Kullmann" },
   { name = "Anastasia Rotermel" },
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
