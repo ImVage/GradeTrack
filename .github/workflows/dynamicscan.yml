@@ -1,0 +1,107 @@
+name: Dynamicscan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap:
+    name: ZAP-Scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+      ZIEL: http://localhost:8000
+    steps:
+      - name: Checkout (actions/checkout v7.0.1)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Image bauen
+        run: bash scripts/build.sh
+
+      - name: GradeTrack starten
+        run: |
+          docker run -d --name gradetrack -p 127.0.0.1:8000:8000 gradetrack:latest
+          for _ in $(seq 1 30); do
+            if curl -fsS "$ZIEL/health" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs gradetrack
+          exit 1
+
+      - name: Anmelden und Token holen
+        run: |
+          token=$(curl -fsS -X POST "$ZIEL/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "pamt", "password": "admin123"}' \
+            | python3 -c "import json, sys; print(json.load(sys.stdin)['api_token'])")
+          echo "::add-mask::$token"
+          echo "ZAP_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: ZAP Full Scan
+        run: |
+          mkdir -p zap && chmod 777 zap
+          status=0
+          docker run --rm --network host \
+            -v "$PWD/zap:/zap/wrk:rw" \
+            -e ZAP_AUTH_HEADER=X-API-Token \
+            -e ZAP_AUTH_HEADER_VALUE="$ZAP_TOKEN" \
+            -e ZAP_AUTH_HEADER_SITE=localhost \
+            "$ZAP_IMAGE" zap-full-scan.py \
+              -t "$ZIEL/" \
+              -m 2 \
+              -I \
+              -z "-config scanner.maxScanDurationInMins=12" \
+              -r zap-bericht.html \
+              -w zap-bericht.md \
+              -J zap-bericht.json \
+            || status=$?
+          if [ "$status" -ge 3 ]; then exit "$status"; fi
+
+      - name: Funde ab Medium bewerten
+        id: bewertung
+        run: |
+          python3 - <<'EOF'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          stufen = {"3": "High", "2": "Medium", "1": "Low", "0": "Info"}
+          daten = json.loads(Path("zap/zap-bericht.json").read_text())
+          funde = [
+              alarm
+              for site in daten.get("site", [])
+              for alarm in site.get("alerts", [])
+              if int(alarm["riskcode"]) >= 2
+          ]
+          funde.sort(key=lambda alarm: -int(alarm["riskcode"]))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              if funde:
+                  summary.write(f"## Dynamicscan: {len(funde)} Fund(e) ab Medium ❌\n\n")
+                  summary.write("| Risiko | Fund | Stellen |\n|---|---|---|\n")
+                  for alarm in funde:
+                      summary.write(f"| {stufen[alarm['riskcode']]} | {alarm['name']} | {alarm['count']} |\n")
+              else:
+                  summary.write("## Dynamicscan: keine Funde ab Medium ✅\n")
+              summary.write("\n<details><summary>Vollständiger ZAP-Bericht</summary>\n\n")
+              summary.write(Path("zap/zap-bericht.md").read_text())
+              summary.write("\n</details>\n")
+
+          sys.exit(1 if funde else 0)
+          EOF
+
+      - name: ZAP-Bericht hochladen (actions/upload-artifact v7.0.2)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: zap-bericht
+          path: |
+            zap/zap-bericht.html
+            zap/zap-bericht.md
+          if-no-files-found: ignore
