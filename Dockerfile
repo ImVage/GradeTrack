@@ -2,7 +2,7 @@
 #
 # Base-Image per Digest gepinnt: Der Tag nennt die Version für Menschen,
 # der Digest legt das Image unveränderlich fest (scripts/check-pinning.sh prüft das).
-FROM python:3.14.10-slim-trixie@sha256:22eafb370920ad8b429e0aec3fff433e0669968519f5d60469d83729c138b28b
+FROM python:3.15.1-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
