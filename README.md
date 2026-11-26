@@ -121,7 +121,8 @@ Rolle, **rot** nur das Prüfungsamt.
 
 ## Schnellstart
 
-**Voraussetzungen:** Python 3.12 und Git
+**Voraussetzungen:** Python 3.14 und Git (oder nur Docker, siehe
+[Mit Docker bauen und starten](#mit-docker-bauen-und-starten))
 
 **Windows (Git Bash)**
 ```bash
@@ -154,6 +155,49 @@ curl -X POST http://localhost:5000/auth/login \
 # Noten mit dem Token abrufen
 curl http://localhost:5000/grades -H "X-API-Token: <token>"
 ```
+
+### Mit Docker bauen und starten
+
+GradeTrack wird als Docker-Image ausgeliefert. So laufen Tests und Betrieb überall mit
+derselben Python-Version und denselben Paketen.
+
+**Bauen** (braucht Docker und Git):
+
+```bash
+bash scripts/build.sh
+```
+
+Das Skript baut das Image aus dem [`Dockerfile`](Dockerfile) und taggt es als
+`gradetrack:<commit>` und `gradetrack:latest`. Der Commit steht zusätzlich als Label
+`org.opencontainers.image.revision` im Image, so lässt sich jedes Image einem Stand zuordnen.
+Mit `IMAGE=<name> bash scripts/build.sh` wählt ihr einen anderen Image-Namen.
+
+**Starten:**
+
+```bash
+cp .env.example .env        # einmalig, Werte eintragen
+docker run --rm -p 127.0.0.1:8000:8000 \
+    --env-file .env \
+    -v gradetrack-data:/data \
+    gradetrack:latest
+```
+
+Die App läuft dann auf **http://localhost:8000**. Die Datenbank liegt im Volume
+`gradetrack-data` und bleibt bei einem Neustart erhalten. Zurücksetzen auf die Beispieldaten:
+`docker volume rm gradetrack-data`.
+
+**Was das Image absichert:**
+
+- **Feste Basis:** `python:3.14-slim` ist per Digest gepinnt, die Pakete werden nur aus dem
+  Lock-File und mit `--require-hashes` installiert.
+- **Kein root:** Die App läuft als Benutzer `gradetrack` (UID 10001). Der Code gehört root
+  und ist für die App nur lesbar, beschreibbar ist nur `/data`.
+- **Produktionsserver:** `gunicorn` statt des Flask-Entwicklungsservers, damit ist auch der
+  Debug-Modus im Container aus.
+- **Keine Secrets im Image:** `.env`, Datenbank, `.git`, Tests und Doku schließt
+  [`.dockerignore`](.dockerignore) aus. Einstellungen kommen erst beim Start per `--env-file`.
+- **Nur lokal erreichbar:** `-p 127.0.0.1:8000:8000` gibt den Port nur auf dem eigenen
+  Rechner frei, nicht im ganzen Netz.
 
 ### Abhängigkeiten
 
@@ -208,6 +252,8 @@ GradeTrack/
 ├── gradetrack.py        # Anwendung (Routen, Auth, Datenbankzugriff)
 ├── templates/           # HTML-Templates (Login, Dashboard)
 ├── static/              # Bilder
+├── Dockerfile           # Container-Image (Base per Digest, Non-Root, gunicorn)
+├── .env.example         # Vorlage für Laufzeit-Einstellungen (.env nie committen)
 ├── requirements.in      # direkte Abhängigkeiten
 ├── requirements.txt     # Lock-File mit Versionen und Hashes (generiert)
 ├── requirements-dev.*   # CI-Werkzeuge (pip-audit, cyclonedx-bom), mit Hashes
@@ -216,7 +262,7 @@ GradeTrack/
 ├── docs/
 │   ├── img/             # Diagramme (Excalidraw)
 │   └── evidence/        # Nachweise: Reports, Screenshots, CI-Läufe
-├── scripts/             # Build- und Betriebsskripte
+├── scripts/             # build.sh (Image bauen), check-pinning.sh
 └── tests/               # automatisierte Tests
 ```
 
