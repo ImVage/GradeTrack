@@ -555,7 +555,7 @@
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
-        <div class="flash {{ category }}">{{ message|safe }}</div>
+        <div class="flash {{ category }}">{{ message }}</div>
       {% endfor %}
     {% endwith %}
 
@@ -678,7 +678,7 @@
                   <td>
                     <span class="grade-badge {% if g.grade > 4.0 %}fail{% endif %}">{{ g.grade }}</span>
                   </td>
-                  <td>{{ g.comment|safe }}</td>
+                  <td>{{ g.comment }}</td>
                   <td>
                     <span class="status-pill {{ g.status }}">
                       {{ "✓ approved" if g.status == "approved" else "⏳ pending" }}
@@ -887,7 +887,7 @@
             <h2>Hinterlegte Module ({{ modules|length }})</h2>
             <div class="head-actions">
               {% if filters.search %}
-                <span class="card-pill">Suche: {{ filters.search|safe }}</span>
+                <span class="card-pill">Suche: {{ filters.search }}</span>
                 <a href="/?tab=modules" class="card-pill" style="text-decoration:none;color:var(--dhbw-red)">✕ Reset</a>
               {% endif %}
             </div>
