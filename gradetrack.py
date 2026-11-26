@@ -296,16 +296,20 @@ def dashboard():
         "LEFT JOIN modules m ON g.module_code = m.code "
         "WHERE 1=1"
     )
+    params = []
     if semester:
-        query += f" AND g.semester = {semester}"
+        query += " AND g.semester = ?"
+        params.append(semester)
     if selected_student_id:
-        query += f" AND g.student_id = {selected_student_id}"
+        query += " AND g.student_id = ?"
+        params.append(selected_student_id)
     if status:
-        query += f" AND g.status = '{status}'"
+        query += " AND g.status = ?"
+        params.append(status)
     query += " ORDER BY g.semester, g.id"
 
     print(f"[ui] Dashboard SQL: {query}")
-    grades = [dict(r) for r in db.execute(query).fetchall()]
+    grades = [dict(r) for r in db.execute(query, params).fetchall()]
 
     passed = [g for g in grades if g["grade"] <= 4.0]
     approved_grades = [g for g in grades if g["status"] == "approved"]
@@ -320,9 +324,11 @@ def dashboard():
         sem_ects[s] = sem_ects.get(s, 0) + g["ects"]
 
     mod_query = "SELECT * FROM modules"
+    mod_params = []
     if search:
-        mod_query += f" WHERE title LIKE '%{search}%' OR code LIKE '%{search}%'"
-    modules = [dict(r) for r in db.execute(mod_query).fetchall()]
+        mod_query += " WHERE title LIKE ? OR code LIKE ?"
+        mod_params = [f"%{search}%", f"%{search}%"]
+    modules = [dict(r) for r in db.execute(mod_query, mod_params).fetchall()]
 
     students = [dict(r) for r in db.execute("SELECT id, username, full_name, role, api_token FROM users").fetchall()]
 
