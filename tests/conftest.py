@@ -22,3 +22,32 @@ def app(gradetrack_modul, tmp_path):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+ZUGANGSDATEN = {
+    "student": ("tobias", "tobias123"),
+    "pruefungsamt": ("pamt", "admin123"),
+}
+
+
+@pytest.fixture
+def zugangsdaten():
+    return ZUGANGSDATEN
+
+
+def angemeldeter_client(app, rolle):
+    client = app.test_client()
+    benutzername, passwort = ZUGANGSDATEN[rolle]
+    antwort = client.post("/auth/login", json={"username": benutzername, "password": passwort})
+    assert antwort.status_code == 200
+    return client
+
+
+@pytest.fixture
+def student(app):
+    return angemeldeter_client(app, "student")
+
+
+@pytest.fixture
+def pruefungsamt(app):
+    return angemeldeter_client(app, "pruefungsamt")
