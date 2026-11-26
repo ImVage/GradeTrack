@@ -4,523 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GradeTrack · Notentracker für Studenten</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --dhbw-red: #E2001A;
-      --dhbw-red-dark: #B50014;
-      --dhbw-gray: #5C6971;
-      --dhbw-charcoal: #14171A;
-      --bg-canvas: #F3F4F6;
-      --card-bg: #FFFFFF;
-      --border-subtle: #E6E8EC;
-      --text-muted: #7C8792;
-    }
-    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
-    body {
-      margin: 0;
-      background: var(--bg-canvas);
-      color: var(--dhbw-charcoal);
-      -webkit-font-smoothing: antialiased;
-    }
-
-    .app-shell {
-      max-width: 1320px;
-      margin: 0 auto;
-      padding: 20px 32px 60px;
-    }
-
-    /* Topbar */
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 0 22px;
-      gap: 20px;
-    }
-    .brand-cluster {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: inherit;
-    }
-    .brand-cluster img {
-      height: 38px;
-      width: auto;
-    }
-    .brand-divider {
-      width: 1px;
-      height: 22px;
-      background: #D5D9DF;
-    }
-    .brand-name {
-      font-weight: 800;
-      font-size: 16.5px;
-      letter-spacing: -0.02em;
-      color: var(--dhbw-charcoal);
-    }
-
-    /* Echte Tab-Navigation */
-    .nav-pills {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(255,255,255,0.85);
-      border: 1px solid var(--border-subtle);
-      padding: 5px;
-      border-radius: 999px;
-      backdrop-filter: blur(8px);
-    }
-    .nav-pills a {
-      text-decoration: none;
-      color: var(--dhbw-gray);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 18px;
-      border-radius: 999px;
-      transition: all .15s ease;
-      cursor: pointer;
-    }
-    .nav-pills a:hover { color: var(--dhbw-charcoal); }
-    .nav-pills a.active {
-      background: var(--dhbw-charcoal);
-      color: #FFFFFF;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    }
-
-    .user-cluster {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .role-tag {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 6px 11px;
-      border-radius: 999px;
-    }
-    .role-tag.registrar {
-      background: rgba(226, 0, 26, 0.12);
-      color: var(--dhbw-red);
-    }
-    .role-tag.student {
-      background: #E5E9EC;
-      color: var(--dhbw-gray);
-    }
-    .user-pill {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      background: #FFFFFF;
-      border: 1px solid var(--border-subtle);
-      border-radius: 999px;
-      padding: 5px 14px 5px 6px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .user-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      background: var(--dhbw-red);
-      color: #FFF;
-      font-size: 11px;
-      font-weight: 800;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      letter-spacing: 0.02em;
-    }
-    .logout-btn {
-      text-decoration: none;
-      font-size: 12.5px;
-      font-weight: 700;
-      color: var(--dhbw-gray);
-      padding: 8px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--border-subtle);
-      background: #FFFFFF;
-      transition: all .15s ease;
-    }
-    .logout-btn:hover { color: var(--dhbw-red); border-color: var(--dhbw-red); }
-
-    /* Hero-Zeile */
-    .hero-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 4px 0 22px;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    .hero-title h1 {
-      margin: 0;
-      font-size: 34px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      color: var(--dhbw-charcoal);
-    }
-
-    .period-filter {
-      display: flex;
-      align-items: center;
-      background: #FFFFFF;
-      border: 1px solid var(--border-subtle);
-      border-radius: 999px;
-      padding: 5px 6px;
-      gap: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
-    }
-    .filter-select-wrap {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0 8px;
-    }
-    .filter-select-wrap svg {
-      width: 14px;
-      height: 14px;
-      color: var(--dhbw-gray);
-      flex-shrink: 0;
-    }
-    .period-filter select {
-      border: 0;
-      background: transparent;
-      padding: 6px 4px;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--dhbw-charcoal);
-      outline: none;
-      cursor: pointer;
-    }
-    .period-filter .compare-tag {
-      background: #F3F4F6;
-      color: var(--text-muted);
-      font-size: 11.5px;
-      font-weight: 600;
-      padding: 6px 11px;
-      border-radius: 999px;
-    }
-    .period-filter button {
-      background: var(--dhbw-charcoal);
-      color: #FFFFFF;
-      border: 0;
-      border-radius: 999px;
-      padding: 7px 15px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .period-filter button:hover { background: var(--dhbw-red); }
-    .period-filter a.reset-pill {
-      text-decoration: none;
-      color: var(--dhbw-gray);
-      background: #F3F4F6;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 7px 12px;
-      border-radius: 999px;
-    }
-    .period-filter a.reset-pill:hover { color: var(--dhbw-red); }
-
-    /* KPI-Leiste */
-    .kpi-strip {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 18px;
-    }
-    .kpi-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-subtle);
-      border-radius: 20px;
-      padding: 20px 22px;
-      box-shadow: 0 4px 18px rgba(17, 24, 39, 0.03);
-    }
-    .kpi-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .kpi-value {
-      font-size: 34px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      color: var(--dhbw-charcoal);
-      line-height: 1.05;
-    }
-    .kpi-value small {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--dhbw-red);
-      margin-left: 4px;
-    }
-    .kpi-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 6px;
-    }
-
-    /* Grids */
-    .overview-grid {
-      display: grid;
-      grid-template-columns: 2.15fr 1fr;
-      gap: 18px;
-      align-items: start;
-    }
-    .two-col-equal {
-      display: grid;
-      grid-template-columns: 1.1fr 1.4fr;
-      gap: 18px;
-      align-items: start;
-    }
-
-    .bento-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-subtle);
-      border-radius: 22px;
-      padding: 24px 26px;
-      box-shadow: 0 4px 20px rgba(17, 24, 39, 0.03);
-    }
-    .card-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .card-head h2 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-    .head-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .card-pill {
-      padding: 5px 11px;
-      border-radius: 999px;
-      border: 1px solid var(--border-subtle);
-      background: #F9FAFB;
-      color: var(--dhbw-gray);
-      font-size: 11.5px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    /* Tabellen */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      text-align: left;
-      padding: 12px 8px;
-      border-bottom: 1px solid #F0F2F5;
-      vertical-align: middle;
-    }
-    th {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-    }
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 11.5px;
-      font-weight: 700;
-    }
-    .status-pill.approved {
-      background: #ECFDF5;
-      color: #047857;
-    }
-    .status-pill.pending {
-      background: #FEF3C7;
-      color: #B45309;
-    }
-    .grade-badge {
-      display: inline-block;
-      min-width: 38px;
-      text-align: center;
-      padding: 4px 8px;
-      border-radius: 8px;
-      font-weight: 800;
-      background: #F3F4F6;
-      color: var(--dhbw-charcoal);
-    }
-    .grade-badge.fail {
-      background: #FEE2E2;
-      color: var(--dhbw-red);
-    }
-
-    .action-row { display: flex; gap: 6px; }
-    .btn-sm {
-      border: 0;
-      border-radius: 999px;
-      padding: 5px 11px;
-      font-size: 11.5px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .btn-approve { background: #10B981; color: #FFF; }
-    .btn-approve:hover { background: #059669; }
-    .btn-delete { background: #FEE2E2; color: var(--dhbw-red); }
-    .btn-delete:hover { background: var(--dhbw-red); color: #FFF; }
-
-    /* Suchleiste im Modulkatalog */
-    .catalog-search {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-    .catalog-search input {
-      flex: 1;
-      padding: 10px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--border-subtle);
-      background: #F9FAFB;
-      font-size: 13px;
-      outline: none;
-    }
-    .catalog-search input:focus {
-      border-color: var(--dhbw-red);
-      background: #FFFFFF;
-    }
-    .catalog-search button {
-      padding: 10px 18px;
-      border-radius: 999px;
-      border: 0;
-      background: var(--dhbw-charcoal);
-      color: #FFF;
-      font-size: 12.5px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .catalog-search button:hover { background: var(--dhbw-red); }
-
-    /* Formulare */
-    .form-grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .form-field { margin-bottom: 13px; }
-    .form-field label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--dhbw-gray);
-      margin-bottom: 6px;
-    }
-    .form-field input, .form-field select {
-      width: 100%;
-      padding: 10px 13px;
-      border-radius: 11px;
-      border: 1px solid var(--border-subtle);
-      background: #F9FAFB;
-      font-size: 13.5px;
-      color: var(--dhbw-charcoal);
-      outline: none;
-    }
-    .form-field input:focus, .form-field select:focus {
-      border-color: var(--dhbw-red);
-      background: #FFFFFF;
-    }
-    .btn-primary-full {
-      width: 100%;
-      padding: 12px;
-      border: 0;
-      border-radius: 999px;
-      background: var(--dhbw-red);
-      color: #FFFFFF;
-      font-weight: 700;
-      font-size: 13.5px;
-      cursor: pointer;
-      box-shadow: 0 8px 20px rgba(226, 0, 26, 0.22);
-    }
-    .btn-primary-full:hover { background: var(--dhbw-red-dark); }
-
-    /* Semester-Fortschrittsbalken */
-    .progress-item { margin-bottom: 15px; }
-    .progress-head {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--dhbw-gray);
-      margin-bottom: 6px;
-    }
-    .progress-track {
-      height: 10px;
-      border-radius: 999px;
-      background: #EEF0F3;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      border-radius: 999px;
-      background: repeating-linear-gradient(
-        -45deg,
-        var(--dhbw-red),
-        var(--dhbw-red) 5px,
-        #FF475C 5px,
-        #FF475C 10px
-      );
-    }
-    .progress-fill.gray {
-      background: repeating-linear-gradient(
-        -45deg,
-        var(--dhbw-gray),
-        var(--dhbw-gray) 5px,
-        #7B8892 5px,
-        #7B8892 10px
-      );
-    }
-    .progress-fill.green {
-      background: repeating-linear-gradient(
-        -45deg,
-        #10B981,
-        #10B981 5px,
-        #34D399 5px,
-        #34D399 10px
-      );
-    }
-
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
-
-    .flash {
-      padding: 12px 18px;
-      border-radius: 14px;
-      margin-bottom: 18px;
-      font-size: 13px;
-      font-weight: 600;
-      background: #FFFFFF;
-      border: 1px solid var(--border-subtle);
-    }
-    .flash.error { border-color: #FCA5A5; background: #FEF2F2; color: #B91C1C; }
-    .flash.success { border-color: #A7F3D0; background: #ECFDF5; color: #065F46; }
-
-    @media (max-width: 1024px) {
-      .kpi-strip { grid-template-columns: repeat(2, 1fr); }
-      .overview-grid, .two-col-equal { grid-template-columns: 1fr; }
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
   <div class="app-shell">
@@ -533,11 +17,11 @@
       </a>
 
       <nav class="nav-pills">
-        <a data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}" onclick="switchTab('overview')">Notenübersicht</a>
-        <a data-tab="add" class="{{ 'active' if active_tab == 'add' else '' }}" onclick="switchTab('add')">Prüfung eintragen</a>
-        <a data-tab="modules" class="{{ 'active' if active_tab == 'modules' else '' }}" onclick="switchTab('modules')">Modulkatalog</a>
+        <a data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}">Notenübersicht</a>
+        <a data-tab="add" class="{{ 'active' if active_tab == 'add' else '' }}">Prüfung eintragen</a>
+        <a data-tab="modules" class="{{ 'active' if active_tab == 'modules' else '' }}">Modulkatalog</a>
         {% if user.role == 'registrar' %}
-          <a data-tab="users" class="{{ 'active' if active_tab == 'users' else '' }}" onclick="switchTab('users')">Benutzerverwaltung</a>
+          <a data-tab="users" class="{{ 'active' if active_tab == 'users' else '' }}">Benutzerverwaltung</a>
         {% endif %}
       </nav>
 
@@ -665,13 +149,13 @@
             <tbody>
               {% for g in grades %}
                 <tr>
-                  <td style="color:var(--text-muted);font-weight:700">#{{ g.id }}</td>
+                  <td class="cell-id">#{{ g.id }}</td>
                   {% if user.role == 'registrar' %}
                     <td><strong>{{ g.student_full_name or g.student_name or g.student_id }}</strong></td>
                   {% endif %}
                   <td>
                     <strong>{{ g.module_code }}</strong>
-                    <div style="font-size:11.5px;color:var(--text-muted)">{{ g.module_title or 'Nicht im Katalog' }}</div>
+                    <div class="module-subtitle">{{ g.module_title or 'Nicht im Katalog' }}</div>
                   </td>
                   <td>Sem. {{ g.semester }}</td>
                   <td><strong>{{ g.ects }}</strong> ECTS</td>
@@ -688,12 +172,12 @@
                     <td>
                       <div class="action-row">
                         {% if g.status != 'approved' %}
-                          <form method="post" action="/ui/grades/{{ g.id }}/approve" style="margin:0">
+                          <form method="post" action="/ui/grades/{{ g.id }}/approve" class="inline-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-sm btn-approve">Bestätigen</button>
                           </form>
                         {% endif %}
-                        <form method="post" action="/ui/grades/{{ g.id }}/delete" style="margin:0">
+                        <form method="post" action="/ui/grades/{{ g.id }}/delete" class="inline-form">
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                           <button type="submit" class="btn-sm btn-delete">Löschen</button>
                         </form>
@@ -703,7 +187,7 @@
                 </tr>
               {% else %}
                 <tr>
-                  <td colspan="9" style="text-align:center;color:var(--text-muted);padding:28px">
+                  <td colspan="9" class="empty-cell">
                     Keine Prüfungsleistungen für diesen Filter vorhanden.
                   </td>
                 </tr>
@@ -724,7 +208,7 @@
               <span>{{ stats.sem_ects.get(1, 0) }} / 30 ECTS</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill green" style="width: {{ [(stats.sem_ects.get(1, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+              <div class="progress-fill green" data-width="{{ [(stats.sem_ects.get(1, 0) / 30 * 100)|round|int, 100]|min }}"></div>
             </div>
           </div>
 
@@ -734,21 +218,21 @@
               <span>{{ stats.sem_ects.get(2, 0) }} / 30 ECTS</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill gray" style="width: {{ [(stats.sem_ects.get(2, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+              <div class="progress-fill gray" data-width="{{ [(stats.sem_ects.get(2, 0) / 30 * 100)|round|int, 100]|min }}"></div>
             </div>
           </div>
 
-          <div class="progress-item" style="margin-bottom:22px">
+          <div class="progress-item last">
             <div class="progress-head">
               <span>3. Semester</span>
               <span>{{ stats.sem_ects.get(3, 0) }} / 30 ECTS</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill" style="width: {{ [(stats.sem_ects.get(3, 0) / 30 * 100)|round|int, 100]|min }}%"></div>
+              <div class="progress-fill" data-width="{{ [(stats.sem_ects.get(3, 0) / 30 * 100)|round|int, 100]|min }}"></div>
             </div>
           </div>
 
-          <button type="button" class="btn-primary-full" onclick="switchTab('add')">+ Neue Prüfung eintragen</button>
+          <button type="button" class="btn-primary-full" data-switch-tab="add">+ Neue Prüfung eintragen</button>
         </div>
       </div>
     </section>
@@ -783,7 +267,7 @@
 
             <div class="form-field">
               <label>Modul aus Katalog</label>
-              <select name="module_code" id="moduleSelect" onchange="syncModule(this)">
+              <select name="module_code" id="moduleSelect">
                 {% for m in modules %}
                   <option value="{{ m.code }}" data-ects="{{ m.ects }}" data-sem="{{ m.semester }}">
                     {{ m.code }} · {{ m.title }} ({{ m.ects }} ECTS)
@@ -892,7 +376,7 @@
             <div class="head-actions">
               {% if filters.search %}
                 <span class="card-pill">Suche: {{ filters.search }}</span>
-                <a href="/?tab=modules" class="card-pill" style="text-decoration:none;color:var(--dhbw-red)">✕ Reset</a>
+                <a href="/?tab=modules" class="card-pill reset">✕ Reset</a>
               {% endif %}
             </div>
           </div>
@@ -910,7 +394,7 @@
             <tbody>
               {% for m in modules %}
                 <tr>
-                  <td><strong style="color:var(--dhbw-red)">{{ m.code }}</strong></td>
+                  <td><strong class="module-code">{{ m.code }}</strong></td>
                   <td><strong>{{ m.title }}</strong></td>
                   <td>{{ m.ects }} ECTS</td>
                   <td>{{ m.semester }}. Semester</td>
@@ -989,25 +473,6 @@
     {% endif %}
   </div>
 
-  <script>
-    function switchTab(tabName) {
-      document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.nav-pills a').forEach(el => el.classList.remove('active'));
-      const pane = document.getElementById('tab-' + tabName);
-      const link = document.querySelector('.nav-pills a[data-tab="' + tabName + '"]');
-      if (pane) pane.classList.add('active');
-      if (link) link.classList.add('active');
-      const url = new URL(window.location);
-      url.searchParams.set('tab', tabName);
-      window.history.replaceState({}, '', url);
-    }
-
-    function syncModule(sel) {
-      const opt = sel.options[sel.selectedIndex];
-      if (!opt) return;
-      document.getElementById('ectsInput').value = opt.dataset.ects || 5;
-      document.getElementById('semInput').value = opt.dataset.sem || 1;
-    }
-  </script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
