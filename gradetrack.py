@@ -34,7 +34,9 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, "grades.db")
+# Im Container zeigt GRADETRACK_DB auf ein beschreibbares Volume (/data),
+# lokal bleibt die Datenbank wie bisher neben dem Code.
+DATABASE = os.environ.get("GRADETRACK_DB", os.path.join(BASE_DIR, "grades.db"))
 
 HOST = "0.0.0.0"
 PORT = 5000
