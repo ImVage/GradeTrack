@@ -1,12 +1,14 @@
 import functools
 import getpass
 import hashlib
+import json
+import logging
 import os
 import secrets
 import sqlite3
 import sys
-import traceback
-from datetime import datetime
+import uuid
+from datetime import UTC, datetime
 
 try:
     from flask import (
@@ -33,6 +35,37 @@ except ImportError:
     sys.exit(1)
 
 import schemas
+
+# ---------------------------------------------------------------------------
+# Logging: eine JSON-Zeile pro Ereignis nach STDOUT, maschinenlesbar.
+# Niemals Passwörter, Tokens, Hashes oder SQL-Text loggen.
+# ---------------------------------------------------------------------------
+
+
+class JsonFormat(logging.Formatter):
+    def format(self, record):
+        eintrag = {
+            "time": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "event": record.getMessage(),
+        }
+        eintrag.update(getattr(record, "felder", {}))
+        if record.exc_info:
+            eintrag["exception"] = self.formatException(record.exc_info)
+        return json.dumps(eintrag, ensure_ascii=False)
+
+
+log = logging.getLogger("gradetrack")
+_ausgabe = logging.StreamHandler(sys.stdout)
+_ausgabe.setFormatter(JsonFormat())
+log.addHandler(_ausgabe)
+log.setLevel(logging.INFO)
+log.propagate = False
+
+
+def protokolliere(ereignis, stufe=logging.INFO, **felder):
+    log.log(stufe, ereignis, extra={"felder": felder})
+
 
 # ---------------------------------------------------------------------------
 # Konfiguration
@@ -139,6 +172,19 @@ SECURITY_HEADERS = {
 @app.after_request
 def set_security_headers(response):
     response.headers.update(SECURITY_HEADERS)
+    return response
+
+
+@app.after_request
+def protokolliere_anfrage(response):
+    benutzer = g.get("user")
+    protokolliere(
+        "request",
+        method=request.method,
+        path=request.path,
+        status=response.status_code,
+        user_id=benutzer["id"] if benutzer else session.get("user_id"),
+    )
     return response
 
 
@@ -256,7 +302,6 @@ def load_user():
     if not token:
         return None
 
-    print(f"[auth] Anfrage mit Token: {token}")
     row = get_db().execute("SELECT * FROM users WHERE api_token = ?", (token_hash(token),)).fetchone()
     if row is None:
         return None
@@ -264,14 +309,16 @@ def load_user():
 
 
 def authenticate_credentials(username, password):
-    print(f"[auth] Login-Versuch: username={username} password={password}")
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     # Eine Meldung für beide Fälle, sonst ließe sich ausprobieren, welche Namen existieren.
     gespeichert = row["password_hash"] if row is not None else DUMMY_HASH
     if not check_password_hash(gespeichert, password) or row is None:
+        # Name (geprüft, max. 64 Zeichen, JSON-kodiert) ja, Passwort nie.
+        protokolliere("login_failed", logging.WARNING, username=username)
         return None, "Benutzername oder Passwort falsch"
 
+    protokolliere("login_ok", user_id=row["id"])
     return dict(row), None
 
 
@@ -499,7 +546,6 @@ def dashboard():
         params.append(status)
     query += " ORDER BY g.semester, g.id"
 
-    print(f"[ui] Dashboard SQL: {query}")
     grades = [dict(r) for r in db.execute(query, params).fetchall()]
 
     passed = [g for g in grades if g["grade"] <= 4.0]
@@ -794,7 +840,7 @@ def create_grade():
         ),
     )
     db.commit()
-    print(f"[grades] {g.user['username']} hat Note {note.grade} für {note.module_code} eingetragen")
+    protokolliere("grade_created", user_id=g.user["id"], grade_id=cur.lastrowid, student_id=student_id)
 
     row = db.execute("SELECT * FROM grades WHERE id = ?", (cur.lastrowid,)).fetchone()
     return jsonify(dict(row)), 201
@@ -849,7 +895,7 @@ def approve_grade(grade_id):
     db.commit()
     if cur.rowcount == 0:
         return jsonify({"error": "Note nicht gefunden"}), 404
-    print(f"[grades] Note {grade_id} bestätigt von {g.user['username']}")
+    protokolliere("grade_approved", user_id=g.user["id"], grade_id=grade_id)
     return jsonify({"message": f"Note {grade_id} bestätigt"})
 
 
@@ -913,7 +959,8 @@ def ects_stats():
 
     passed = [r for r in rows if r["grade"] <= 4.0]
     total_ects = sum(r["ects"] for r in passed)
-    weighted = sum(r["grade"] * r["ects"] for r in passed) / total_ects
+    # Ohne bestandene Prüfungen gibt es keinen Durchschnitt (statt Division durch null).
+    average = round(sum(r["grade"] * r["ects"] for r in passed) / total_ects, 2) if total_ects else None
 
     return jsonify(
         {
@@ -923,7 +970,7 @@ def ects_stats():
             "passed": len(passed),
             "failed": len(rows) - len(passed),
             "total_ects": total_ects,
-            "average": round(weighted, 2),
+            "average": average,
         }
     )
 
@@ -952,7 +999,7 @@ def create_user():
             "Ungültige Eingabe", [{"feld": "username", "meldung": "Benutzername ist bereits vergeben"}]
         ) from None
     db.commit()
-    print(f"[users] Neuer Benutzer {neu.username} ({full_name})")
+    protokolliere("user_created", user_id=g.user["id"], new_user_id=cur.lastrowid, role=neu.role)
     # Kein Token in der Antwort: Die Person holt sich ihr eigenes beim ersten Login.
     return jsonify({"id": cur.lastrowid, "username": neu.username, "full_name": full_name}), 201
 
@@ -961,7 +1008,11 @@ def create_user():
 def handle_error(e):
     if isinstance(e, HTTPException):
         return jsonify({"error": e.description}), e.code
-    return jsonify({"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()}), 500
+    # Stacktrace, Fehlertyp und Pfade verraten Interna. Sie gehen nur ins Log,
+    # die Antwort enthält eine ID, über die sich der Eintrag dort finden lässt.
+    fehler_id = uuid.uuid4().hex[:12]
+    log.error("internal_error", exc_info=e, extra={"felder": {"error_id": fehler_id, "path": request.path}})
+    return jsonify({"error": "Interner Fehler", "error_id": fehler_id}), 500
 
 
 def lege_pruefungsamt_an(username):
@@ -984,8 +1035,8 @@ def lege_pruefungsamt_an(username):
 
 with app.app_context():
     if not os.path.exists(app.config["DATABASE"]):
-        print("[db] Keine Datenbank gefunden, lege neue an ...")
         init_db()
+        protokolliere("database_created", demo_data=DEMO_DATA)
         if not DEMO_DATA:
             print("[db] Ohne Beispieldaten angelegt. Zugang anlegen: python gradetrack.py --create-registrar <name>")
 
