@@ -12,3 +12,8 @@ authors = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.bandit]
+# Geprüft wird der Anwendungscode. Tests nutzen bewusst assert und Demo-Passwörter.
+exclude_dirs = ["tests", ".venv", "venv"]
+
