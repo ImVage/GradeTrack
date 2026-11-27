@@ -32,6 +32,9 @@ USER gradetrack
 VOLUME ["/data"]
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+
 # gunicorn statt Flask-Entwicklungsserver. Ein Worker, weil die App beim Start
 # die SQLite-Datenbank anlegt; mehrere Threads reichen für die Last.
 # --no-control-socket: Die Fernsteuer-Schnittstelle von gunicorn brauchen wir nicht

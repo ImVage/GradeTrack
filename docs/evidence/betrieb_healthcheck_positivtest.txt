@@ -1,0 +1,28 @@
+Positivtest Health-Check-Skript (scripts/healthcheck.py)
+Quelle: lokaler Lauf, App mit gunicorn wie im Container (Port 8000, Datenbank in eigenem Verzeichnis), 27.11.2026
+Ablauf: 1. App gesund  2. Datenbankdatei entfernt  3. Datenbank zurück  4. App gestoppt
+Erwartet: HEALTHY (Exit 0), UNHEALTHY mit 503 (Exit 1), HEALTHY (Exit 0), UNHEALTHY nicht erreichbar (Exit 1)
+================================================================================
+
+$ python scripts/healthcheck.py
+HEALTHY: http://127.0.0.1:8000/health - HTTP 200 in 0.01 s, Prüfungen ok: database
+Exit-Code: 0
+
+$ mv grades.db grades.db.bak
+$ python scripts/healthcheck.py
+UNHEALTHY: http://127.0.0.1:8000/health - HTTP 503, fehlerhafte Prüfung: database
+Exit-Code: 1
+
+Log der App zu dieser Abfrage:
+{"time": "2026-11-27T12:03:01.233+00:00", "level": "ERROR", "event": "health_failed", "check": "database", "reason": "OperationalError"}
+{"time": "2026-11-27T12:03:01.233+00:00", "level": "INFO", "event": "request", "method": "GET", "path": "/health", "status": 503, "user_id": null}
+
+$ mv grades.db.bak grades.db
+$ python scripts/healthcheck.py
+HEALTHY: http://127.0.0.1:8000/health - HTTP 200 in 0.00 s, Prüfungen ok: database
+Exit-Code: 0
+
+$ App gestoppt
+$ python scripts/healthcheck.py
+UNHEALTHY: http://127.0.0.1:8000/health - App nicht erreichbar (Verbindung abgelehnt)
+Exit-Code: 1

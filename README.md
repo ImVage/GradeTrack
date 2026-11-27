@@ -102,7 +102,7 @@ Rolle, **rot** nur das Prüfungsamt.
 
 | Methode | Pfad | Zweck | Zugriff |
 |---|---|---|---|
-| GET | `/health` | Statusprüfung | öffentlich |
+| GET | `/health` | Statusprüfung inkl. Datenbank (`200` ok, `503` gestört) | öffentlich |
 | POST | `/auth/login`, `/auth/logout` | An- und Abmeldung, liefert API-Token | öffentlich |
 | GET | `/modules` | Module suchen (`search`) | öffentlich |
 | POST | `/modules` | Modul anlegen | angemeldet |
@@ -216,6 +216,68 @@ ein Reverse-Proxy HTTPS).
   [`.dockerignore`](.dockerignore) aus. Einstellungen kommen erst beim Start per `--env-file`.
 - **Nur lokal erreichbar:** `-p 127.0.0.1:8000:8000` gibt den Port nur auf dem eigenen
   Rechner frei, nicht im ganzen Netz.
+
+### Health Check
+
+`GET /health` prüft, ob die App ihre Datenbank wirklich nutzen kann: Die Datei muss
+vorhanden und lesbar sein und die Tabellen `users`, `modules` und `grades` enthalten. Die
+Verbindung ist schreibgeschützt (`mode=ro`), der Check legt also nie versehentlich eine
+leere Datenbank an.
+
+| Zustand | HTTP-Status | Antwort |
+|---|---|---|
+| gesund | `200` | `{"status": "ok", "checks": {"database": "ok"}}` |
+| gestört | `503` | `{"status": "error", "checks": {"database": "error"}}` |
+
+Die Antwort verrät keine Pfade oder Fehlermeldungen. Den Grund schreibt die App als
+JSON-Zeile `health_failed` (mit `check` und `reason`) ins Log.
+
+Im Container ruft Docker den Endpunkt über den `HEALTHCHECK` im [`Dockerfile`](Dockerfile)
+alle 30 Sekunden auf. Nach drei Fehlschlägen hintereinander gilt der Container als
+`unhealthy`. Den Zustand zeigt `docker ps` in der Spalte `STATUS`, Details liefert:
+
+```bash
+docker inspect --format '{{json .State.Health}}' <container>
+```
+
+### Health-Check-Skript
+
+[`scripts/healthcheck.py`](scripts/healthcheck.py) fragt `/health` von außen ab und gibt
+genau eine Zeile aus: `HEALTHY` oder `UNHEALTHY` mit Grund. Es braucht nur die
+Python-Standardbibliothek und läuft deshalb auch ohne venv, z. B. per Cron oder aus einem
+Monitoring-Tool, das den Exit-Code auswertet.
+
+Ohne Optionen prüft das Skript den Container auf Port 8000. Mit `--url` wird eine andere
+Adresse geprüft, z. B. der Entwicklungsserver. `--timeout` und `--max-dauer` setzen strengere
+oder lockerere Zeitgrenzen in Sekunden.
+
+```bash
+python scripts/healthcheck.py
+python scripts/healthcheck.py --url http://127.0.0.1:5000/health
+python scripts/healthcheck.py --timeout 3 --max-dauer 1
+```
+
+| Exit-Code | Bedeutung |
+|---|---|
+| `0` | `HEALTHY`: `/health` antwortet mit `200`, alle Prüfungen `ok`, schneller als `--max-dauer` (Standard 2 s) |
+| `1` | `UNHEALTHY`: App nicht erreichbar, keine Antwort innerhalb `--timeout` (Standard 5 s), Antwort `503`, zu langsam oder kein gültiges JSON |
+| `2` | falscher Aufruf, z. B. keine `http(s)`-URL |
+
+Beispiel:
+
+```
+HEALTHY: http://127.0.0.1:8000/health - HTTP 200 in 0.01 s, Prüfungen ok: database
+UNHEALTHY: http://127.0.0.1:8000/health - HTTP 503, fehlerhafte Prüfung: database
+```
+
+**Ungesunden Zustand beheben:**
+
+| Meldung | Wahrscheinliche Ursache | Behebung |
+|---|---|---|
+| `App nicht erreichbar (Verbindung abgelehnt)` | Container läuft nicht, ist beim Start abgestürzt oder der Port stimmt nicht | `docker ps -a` zeigt, ob der Container läuft. `docker logs <container>` zeigt den Grund, meist fehlt `GRADETRACK_SECRET_KEY` oder ist zu kurz: `.env` prüfen und neu starten. Läuft er, Portfreigabe `-p 127.0.0.1:8000:8000` und `--url` prüfen. |
+| `keine Antwort innerhalb von … s` / `Antwort zu langsam` | App hängt oder ist überlastet, die Datenbank ist gesperrt | `docker logs <container>` auf `internal_error` prüfen, dann `docker restart <container>`. Tritt es wiederholt auf, Last und gleichzeitige Schreibzugriffe untersuchen. |
+| `HTTP 503, fehlerhafte Prüfung: database` | Datenbankdatei fehlt, Volume nicht eingebunden, keine Leserechte oder Tabellen fehlen | Im Log steht `health_failed` mit `reason`. `OperationalError`: Ist das Volume eingebunden (`-v gradetrack-data:/data`, `docker volume inspect gradetrack-data`) und gehört `/data` dem Benutzer `gradetrack` (UID 10001)? `schema_incomplete`: Datenbank aus einer Sicherung wiederherstellen. **Achtung:** Startet der Container ohne Datenbank neu, legt die App eine neue, leere an. Vorher sichern, sonst sind die Noten weg. |
+| `kein JSON` / `keine gültige HTTP-Antwort` | Unter der URL antwortet ein anderer Dienst | `--url` und Port prüfen. |
 
 ### Abhängigkeiten
 
