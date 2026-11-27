@@ -17,3 +17,8 @@ pythonpath = ["."]
 # Geprüft wird der Anwendungscode. Tests nutzen bewusst assert und Demo-Passwörter.
 exclude_dirs = ["tests", ".venv", "venv"]
 
+[tool.mypy]
+python_version = "3.14"
+files = ["gradetrack.py"]
+strict = true
+plugins = ["pydantic.mypy"]
