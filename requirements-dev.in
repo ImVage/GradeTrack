@@ -1,3 +1,7 @@
+-c requirements.txt
 pip-audit
 cyclonedx-bom
 pytest
+bandit
+mypy
+pre-commit
