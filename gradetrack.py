@@ -101,8 +101,28 @@ app.config.update(
     DATABASE=DATABASE,
     SECRET_KEY=SECRET_KEY,
     ADMIN_API_TOKEN=ADMIN_API_TOKEN,
+    SESSION_COOKIE_SAMESITE="Lax",
 )
 csrf = CSRFProtect(app)
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; object-src 'none'; base-uri 'self'; "
+        "form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
+}
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers.update(SECURITY_HEADERS)
+    return response
 
 
 # ---------------------------------------------------------------------------
