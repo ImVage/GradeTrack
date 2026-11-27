@@ -4,350 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DHBW Mannheim · GradeTrack Login</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --dhbw-red: #E2001A;
-      --dhbw-red-dark: #B80015;
-      --dhbw-red-soft: rgba(226, 0, 26, 0.14);
-      --dhbw-gray: #5C6971;
-      --dhbw-charcoal: #1E242B;
-      --border-soft: #E5E7EB;
-      --text-muted: #8A94A0;
-    }
-    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
-    html, body { margin: 0; height: 100%; background: #FFFFFF; color: var(--dhbw-charcoal); }
-
-    .split-layout {
-      display: grid;
-      grid-template-columns: 48% 52%;
-      min-height: 100vh;
-    }
-
-    /* Linke Spalte (wie Photoma-Vorlage) */
-    .left-pane {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 36px 56px;
-      background: #FFFFFF;
-    }
-
-    .top-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .top-bar img.logo {
-      height: 54px;
-      width: auto;
-      object-fit: contain;
-    }
-    .top-bar a.home-link {
-      color: var(--dhbw-gray);
-      text-decoration: none;
-      font-size: 13.5px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-    }
-    .top-bar a.home-link:hover { color: var(--dhbw-red); }
-
-    .form-center {
-      width: 100%;
-      max-width: 370px;
-      margin: 0 auto;
-    }
-    .eyebrow {
-      font-size: 10.5px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--dhbw-gray);
-      margin-bottom: 8px;
-    }
-    h1 {
-      margin: 0 0 28px;
-      font-size: 27px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: var(--dhbw-charcoal);
-    }
-
-    .field-group { margin-bottom: 18px; }
-    .field-group label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--dhbw-gray);
-      margin-bottom: 7px;
-      padding-left: 12px;
-    }
-    .pill-input {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-    .pill-input svg.lead-icon {
-      position: absolute;
-      left: 16px;
-      width: 17px;
-      height: 17px;
-      color: #B0B8C1;
-      pointer-events: none;
-    }
-    .pill-input button.eye-btn {
-      position: absolute;
-      right: 14px;
-      background: none;
-      border: 0;
-      padding: 4px;
-      cursor: pointer;
-      color: #B0B8C1;
-      display: flex;
-      align-items: center;
-    }
-    .pill-input button.eye-btn:hover { color: var(--dhbw-gray); }
-    .pill-input input {
-      width: 100%;
-      height: 46px;
-      padding: 0 42px 0 44px;
-      border-radius: 999px;
-      border: 1px solid var(--border-soft);
-      background: #FFFFFF;
-      color: var(--dhbw-charcoal);
-      font-size: 13.5px;
-      outline: none;
-      transition: border-color .18s, box-shadow .18s;
-    }
-    .pill-input input::placeholder { color: #C0C7CF; }
-    .pill-input input:focus {
-      border-color: var(--dhbw-red);
-      box-shadow: 0 0 0 4px var(--dhbw-red-soft);
-    }
-
-    .btn-row {
-      margin-top: 22px;
-    }
-    .btn-pill {
-      width: 100%;
-      height: 46px;
-      border-radius: 999px;
-      font-size: 13.5px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all .18s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-    }
-    .btn-solid {
-      background: var(--dhbw-red);
-      border: 1.5px solid var(--dhbw-red);
-      color: #FFFFFF;
-      box-shadow: 0 10px 24px rgba(226, 0, 26, 0.28);
-    }
-    .btn-solid:hover {
-      background: var(--dhbw-red-dark);
-      border-color: var(--dhbw-red-dark);
-      transform: translateY(-1px);
-    }
-
-    .meta-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 16px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .remember {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
-      color: var(--dhbw-gray);
-    }
-    .remember input { accent-color: var(--dhbw-red); }
-    .forgot-link {
-      color: #C0C7CF;
-      text-decoration: none;
-    }
-    .forgot-link:hover { color: var(--dhbw-red); }
-
-    .flash {
-      padding: 11px 16px;
-      border-radius: 14px;
-      margin-bottom: 18px;
-      font-size: 12.5px;
-      font-weight: 500;
-    }
-    .flash.error {
-      background: #FEF2F2;
-      border: 1px solid #FECACA;
-      color: #B91C1C;
-    }
-    .flash.info, .flash.success {
-      background: #F3F4F6;
-      border: 1px solid #E5E7EB;
-      color: var(--dhbw-charcoal);
-    }
-
-    /* Schnell-Login-Leiste für die Gruppe */
-    .quick-accounts {
-      margin-top: 28px;
-      padding-top: 18px;
-      border-top: 1px dashed #E5E7EB;
-    }
-    .quick-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-    .quick-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-    }
-    .quick-chip {
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
-      border-radius: 12px;
-      padding: 8px 11px;
-      text-align: left;
-      cursor: pointer;
-      transition: all .15s ease;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-    }
-    .quick-chip:hover {
-      border-color: var(--dhbw-red);
-      background: #FFF5F5;
-    }
-    .quick-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      background: var(--dhbw-gray);
-      color: #FFF;
-      font-size: 11px;
-      font-weight: 700;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .quick-chip.admin .quick-avatar { background: var(--dhbw-red); }
-    .quick-meta strong {
-      display: block;
-      font-size: 12px;
-      color: var(--dhbw-charcoal);
-      line-height: 1.2;
-    }
-    .quick-meta span {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .bottom-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .bottom-bar a { color: var(--dhbw-gray); text-decoration: none; font-weight: 500; }
-    .lang-switch strong { color: var(--dhbw-charcoal); }
-
-    /* Rechte Spalte: DHBW Campus Mannheim Foto */
-    .right-pane {
-      position: relative;
-      background-image: url('/static/img/dhbw-campus.png');
-      background-size: cover;
-      background-position: center;
-      overflow: hidden;
-    }
-    .right-pane::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(
-        180deg,
-        rgba(15, 23, 42, 0.08) 0%,
-        rgba(15, 23, 42, 0.18) 65%,
-        rgba(15, 23, 42, 0.72) 100%
-      );
-    }
-
-    .campus-footer {
-      position: absolute;
-      left: 36px;
-      right: 36px;
-      bottom: 30px;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: #FFFFFF;
-    }
-    .campus-badge {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .campus-badge .badge-circle {
-      width: 42px;
-      height: 42px;
-      border-radius: 999px;
-      background: #FFFFFF;
-      padding: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-    }
-    .campus-badge .badge-circle img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    .campus-badge .badge-text strong {
-      display: block;
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .campus-badge .badge-text span {
-      font-size: 12px;
-      color: rgba(255,255,255,0.78);
-    }
-    .slider-dots {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .slider-dots i {
-      display: block;
-      height: 6px;
-      width: 6px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.55);
-    }
-    .slider-dots i.active {
-      width: 22px;
-      background: #FFFFFF;
-    }
-
-    @media (max-width: 920px) {
-      .split-layout { grid-template-columns: 1fr; }
-      .right-pane { min-height: 280px; }
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body>
   <div class="split-layout">
@@ -364,11 +21,12 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message|safe }}</div>
+            <div class="flash {{ category }}">{{ message }}</div>
           {% endfor %}
         {% endwith %}
 
         <form method="post" action="/login" id="loginForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="field-group">
             <label for="username">Benutzerkennung</label>
             <div class="pill-input">
@@ -388,7 +46,7 @@
                 <path d="M10.85 12.15L19 4m-2 2l3 3m-5 0l2 2"/>
               </svg>
               <input type="password" id="password" name="password" placeholder="Dein Passwort" required>
-              <button type="button" class="eye-btn" onclick="togglePw()" title="Passwort anzeigen">
+              <button type="button" class="eye-btn" title="Passwort anzeigen">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
                   <circle cx="12" cy="12" r="3"/>
@@ -412,28 +70,28 @@
         <div class="quick-accounts" id="quick">
           <div class="quick-title">1-Klick Gruppen-Login (Präsentation)</div>
           <div class="quick-grid">
-            <button type="button" class="quick-chip" onclick="fillLogin('tobias','tobias123')">
+            <button type="button" class="quick-chip" data-username="tobias" data-password="tobias123">
               <span class="quick-avatar">TG</span>
               <span class="quick-meta">
                 <strong>Tobias Gehrke</strong>
                 <span>tobias · Student</span>
               </span>
             </button>
-            <button type="button" class="quick-chip" onclick="fillLogin('pavel','pavel123')">
+            <button type="button" class="quick-chip" data-username="pavel" data-password="pavel123">
               <span class="quick-avatar">PK</span>
               <span class="quick-meta">
                 <strong>Pavel Kullmann</strong>
                 <span>pavel · Student</span>
               </span>
             </button>
-            <button type="button" class="quick-chip" onclick="fillLogin('anastasia','anastasia123')">
+            <button type="button" class="quick-chip" data-username="anastasia" data-password="anastasia123">
               <span class="quick-avatar">AR</span>
               <span class="quick-meta">
                 <strong>Anastasia Rotermel</strong>
                 <span>anastasia · Studentin</span>
               </span>
             </button>
-            <button type="button" class="quick-chip admin" onclick="fillLogin('pamt','admin123')">
+            <button type="button" class="quick-chip admin" data-username="pamt" data-password="admin123">
               <span class="quick-avatar">PA</span>
               <span class="quick-meta">
                 <strong>Prüfungsamt</strong>
@@ -472,16 +130,6 @@
     </div>
   </div>
 
-  <script>
-    function fillLogin(u, p) {
-      document.getElementById('username').value = u;
-      document.getElementById('password').value = p;
-      document.getElementById('loginForm').submit();
-    }
-    function togglePw() {
-      const inp = document.getElementById('password');
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-    }
-  </script>
+  <script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
 </html>

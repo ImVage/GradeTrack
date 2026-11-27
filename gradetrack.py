@@ -20,6 +20,7 @@ try:
         session,
         url_for,
     )
+    from flask_wtf.csrf import CSRFProtect
     from werkzeug.exceptions import HTTPException
 except ImportError:
     print(
@@ -100,7 +101,28 @@ app.config.update(
     DATABASE=DATABASE,
     SECRET_KEY=SECRET_KEY,
     ADMIN_API_TOKEN=ADMIN_API_TOKEN,
+    SESSION_COOKIE_SAMESITE="Lax",
 )
+csrf = CSRFProtect(app)
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; object-src 'none'; base-uri 'self'; "
+        "form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
+}
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers.update(SECURITY_HEADERS)
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -296,16 +318,20 @@ def dashboard():
         "LEFT JOIN modules m ON g.module_code = m.code "
         "WHERE 1=1"
     )
+    params = []
     if semester:
-        query += f" AND g.semester = {semester}"
+        query += " AND g.semester = ?"
+        params.append(semester)
     if selected_student_id:
-        query += f" AND g.student_id = {selected_student_id}"
+        query += " AND g.student_id = ?"
+        params.append(selected_student_id)
     if status:
-        query += f" AND g.status = '{status}'"
+        query += " AND g.status = ?"
+        params.append(status)
     query += " ORDER BY g.semester, g.id"
 
     print(f"[ui] Dashboard SQL: {query}")
-    grades = [dict(r) for r in db.execute(query).fetchall()]
+    grades = [dict(r) for r in db.execute(query, params).fetchall()]
 
     passed = [g for g in grades if g["grade"] <= 4.0]
     approved_grades = [g for g in grades if g["status"] == "approved"]
@@ -320,9 +346,11 @@ def dashboard():
         sem_ects[s] = sem_ects.get(s, 0) + g["ects"]
 
     mod_query = "SELECT * FROM modules"
+    mod_params = []
     if search:
-        mod_query += f" WHERE title LIKE '%{search}%' OR code LIKE '%{search}%'"
-    modules = [dict(r) for r in db.execute(mod_query).fetchall()]
+        mod_query += " WHERE title LIKE ? OR code LIKE ?"
+        mod_params = [f"%{search}%", f"%{search}%"]
+    modules = [dict(r) for r in db.execute(mod_query, mod_params).fetchall()]
 
     students = [dict(r) for r in db.execute("SELECT id, username, full_name, role, api_token FROM users").fetchall()]
 
@@ -458,10 +486,14 @@ def ui_add_user():
     token = generate_token()
 
     db = get_db()
-    db.execute(
-        "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-        (username, full_name, weak_hash(password), role, token),
-    )
+    try:
+        db.execute(
+            "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
+            (username, full_name, weak_hash(password), role, token),
+        )
+    except sqlite3.IntegrityError:
+        flash(f"Benutzername '{username}' ist bereits vergeben.", "error")
+        return redirect(url_for("dashboard", tab="users"))
     db.commit()
     flash(f"Benutzer '{full_name}' ({username}) angelegt.", "success")
     return redirect(url_for("dashboard", tab="users"))
@@ -478,6 +510,7 @@ def health():
 
 
 @app.post("/auth/login")
+@csrf.exempt
 def api_login():
     data = request.get_json() or {}
     user, error = authenticate_credentials(data.get("username", ""), data.get("password", ""))
@@ -497,6 +530,7 @@ def api_login():
 
 
 @app.post("/auth/logout")
+@csrf.exempt
 def api_logout():
     session.clear()
     return jsonify({"message": "Abgemeldet"})
@@ -534,6 +568,7 @@ def get_grade(grade_id):
 
 
 @app.post("/grades")
+@csrf.exempt
 @login_required
 def create_grade():
     data = request.get_json()
@@ -566,6 +601,7 @@ def create_grade():
 
 
 @app.put("/grades/<int:grade_id>")
+@csrf.exempt
 @login_required
 def update_grade(grade_id):
     data = request.get_json()
@@ -585,6 +621,7 @@ def update_grade(grade_id):
 
 
 @app.post("/grades/<int:grade_id>/approve")
+@csrf.exempt
 @registrar_required
 def approve_grade(grade_id):
     db = get_db()
@@ -600,6 +637,7 @@ def approve_grade(grade_id):
 
 
 @app.delete("/grades/<int:grade_id>")
+@csrf.exempt
 @registrar_required
 def delete_grade(grade_id):
     db = get_db()
@@ -619,6 +657,7 @@ def list_modules():
 
 
 @app.post("/modules")
+@csrf.exempt
 @login_required
 def create_module():
     data = request.get_json()
@@ -670,6 +709,7 @@ def list_users():
 
 
 @app.post("/users")
+@csrf.exempt
 @registrar_required
 def create_user():
     data = request.get_json()

@@ -72,13 +72,18 @@ jobs:
           from pathlib import Path
 
           stufen = {"3": "High", "2": "Medium", "1": "Low", "0": "Info"}
+          ausnahmen = {
+              "10106": "HTTPS terminiert im Betrieb ein Reverse-Proxy vor der App, im Scan läuft sie bewusst nur über HTTP.",
+          }
           daten = json.loads(Path("zap/zap-bericht.json").read_text())
-          funde = [
+          alle = [
               alarm
               for site in daten.get("site", [])
               for alarm in site.get("alerts", [])
               if int(alarm["riskcode"]) >= 2
           ]
+          funde = [alarm for alarm in alle if alarm["pluginid"] not in ausnahmen]
+          ignoriert = [alarm for alarm in alle if alarm["pluginid"] in ausnahmen]
           funde.sort(key=lambda alarm: -int(alarm["riskcode"]))
 
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
@@ -89,6 +94,12 @@ jobs:
                       summary.write(f"| {stufen[alarm['riskcode']]} | {alarm['name']} | {alarm['count']} |\n")
               else:
                   summary.write("## Dynamicscan: keine Funde ab Medium ✅\n")
+              if ignoriert:
+                  summary.write("\n### Bewusst ausgenommen\n\n| Risiko | Fund | Begründung |\n|---|---|---|\n")
+                  for alarm in ignoriert:
+                      summary.write(
+                          f"| {stufen[alarm['riskcode']]} | {alarm['name']} | {ausnahmen[alarm['pluginid']]} |\n"
+                      )
               summary.write("\n<details><summary>Vollständiger ZAP-Bericht</summary>\n\n")
               summary.write(Path("zap/zap-bericht.md").read_text())
               summary.write("\n</details>\n")
