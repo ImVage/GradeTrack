@@ -19,7 +19,7 @@ exclude_dirs = ["tests", ".venv", "venv"]
 
 [tool.mypy]
 python_version = "3.14"
-files = ["gradetrack.py", "schemas.py"]
+files = ["gradetrack.py", "schemas.py", "scripts/healthcheck.py"]
 strict = true
 plugins = ["pydantic.mypy"]
 

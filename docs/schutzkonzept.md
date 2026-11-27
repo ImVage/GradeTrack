@@ -94,7 +94,7 @@ Version in GradeTrack stecken.
 
 - [x] Die Anwendung schreibt strukturierte, maschinenlesbare Logs in STDOUT oder eine Datei.
 - [x] Für die Hauptanwendung ist ein sinnvoller Health Check konfiguriert.
-- [ ] Ein separates Health-Check-Skript unterscheidet HEALTHY und UNHEALTHY.
+- [x] Ein separates Health-Check-Skript unterscheidet HEALTHY und UNHEALTHY.
 - [ ] *Vertiefung:* Logs werden ausgewertet, um Verfügbarkeit und Fehlerquote zu ermitteln.
 
 **Warum das für uns wichtig ist:** Im Ausgangsstand gibt GradeTrack nur unstrukturierte
@@ -113,6 +113,7 @@ erkennen.
 | Kriterium | Umsetzung | Nachweis |
 |---|---|---|
 | Health Check der Hauptanwendung | `GET /health` in [`gradetrack.py`](../gradetrack.py) öffnet die Datenbank schreibgeschützt und prüft, ob die Tabellen `users`, `modules` und `grades` vorhanden sind. Gesund: `200`, gestört: `503` ohne interne Details, der Grund steht als `health_failed` im Log. Der `HEALTHCHECK` im [`Dockerfile`](../Dockerfile) ruft den Endpunkt alle 30 s auf, nach 3 Fehlschlägen ist der Container `unhealthy`. | [`tests/test_health.py`](../tests/test_health.py) (fehlende Datenbank, fehlende Tabelle), Workflow *Dynamictest* |
+| Separates Health-Check-Skript | [`scripts/healthcheck.py`](../scripts/healthcheck.py) ruft `/health` von außen auf und meldet `HEALTHY` (Exit-Code 0) oder `UNHEALTHY` mit Grund (Exit-Code 1): nicht erreichbar, Zeitüberschreitung, `503` oder zu langsam. Nur Standardbibliothek, damit es auch ohne venv in Cron oder Monitoring läuft. Nutzung und Behebung im [README](../README.md#health-check-skript). | [`tests/test_healthcheck_skript.py`](../tests/test_healthcheck_skript.py), [Positivtest](evidence/betrieb_healthcheck_positivtest.txt) |
 
 ---
 
