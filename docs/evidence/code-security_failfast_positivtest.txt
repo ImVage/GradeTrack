@@ -1,0 +1,25 @@
+Positivtest Fail Fast (pytest, tests/test_fail_fast.py)
+Quelle: GitHub Actions, Lauf https://github.com/ImVage/GradeTrack/actions/runs/45977821799 (Dynamictest #8, Job "Anwendungstests")
+        Artefakt "test-report", PR #13 (Branch ci/code-security, Commit 4a3b1b9), 27.11.2026
+Geprüft wird der noch unsichere Anwendungscode von main (Stand nach PR #12).
+Ergebnis: 16 von 16 Fail-Fast-Tests rot, die übrigen 30 Tests grün (46 gesamt).
+Erwartet wird jeweils 400. Stattdessen werden ungültige Eingaben gespeichert (201),
+ungeprüft durchgereicht (200) oder führen zu einem Serverfehler (500).
+================================================================================
+Test                                                                                         Ergebnis
+test_ungueltige_note_wird_mit_400_abgelehnt[note-kein-zahlwert]                              rot (Antwort 500)
+test_ungueltige_note_wird_mit_400_abgelehnt[ects-als-text]                                   rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[semester-ausserhalb]                             rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[ects-negativ]                                    rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[modulcode-falsches-format]                       rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[modul-existiert-nicht]                           rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[kommentar-zu-lang]                               rot (Antwort 201)
+test_ungueltige_note_wird_mit_400_abgelehnt[unbekanntes-feld]                                rot (Antwort 201)
+test_fehlendes_pflichtfeld_wird_mit_400_abgelehnt                                            rot (Antwort 500)
+test_json_ohne_objekt_wird_mit_400_abgelehnt[null]                                           rot (Antwort 500)
+test_json_ohne_objekt_wird_mit_400_abgelehnt[[1, 2]]                                         rot (Antwort 500)
+test_json_ohne_objekt_wird_mit_400_abgelehnt["text"]                                         rot (Antwort 500)
+test_ungueltige_filter_werden_mit_400_abgelehnt[semester-kein-zahlwert]                      rot (Antwort 500)
+test_ungueltige_filter_werden_mit_400_abgelehnt[status-nicht-erlaubt]                        rot (Antwort 200)
+test_ungueltige_filter_werden_mit_400_abgelehnt[sortierung-nicht-erlaubt]                    rot (Antwort 500)
+test_ungueltige_note_im_formular_fuehrt_nicht_zu_serverfehler                                rot (Antwort 500)
