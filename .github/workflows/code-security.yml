@@ -87,7 +87,8 @@ jobs:
         run: |
           set +e
           docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" git /repo \
-            --config /repo/.gitleaks.toml --redact --no-banner --no-color \
+            --config /repo/.gitleaks.toml --gitleaks-ignore-path /repo/.gitleaksignore \
+            --redact --no-banner --no-color \
             --report-format json --report-path /repo/gitleaks-report.json
           status=$?
           set -e

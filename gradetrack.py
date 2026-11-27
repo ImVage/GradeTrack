@@ -1,4 +1,5 @@
 import functools
+import getpass
 import hashlib
 import os
 import random
@@ -39,12 +40,36 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # lokal bleibt die Datenbank wie bisher neben dem Code.
 DATABASE = os.environ.get("GRADETRACK_DB", os.path.join(BASE_DIR, "grades.db"))
 
-HOST = "0.0.0.0"
-PORT = 5000
-DEBUG = True
 
-SECRET_KEY = "dev-secret-key-123"
-ADMIN_API_TOKEN = "gt_admin_7Hq2LxP9vR4mKs8NcW3bYt6ZfJ1dQe5A"
+def env_schalter(name, standard):
+    """Liest einen Ja/Nein-Schalter aus der Umgebung. Unbekannte Werte sind ein Fehler."""
+    wert = os.environ.get(name)
+    if wert is None or wert == "":
+        return standard
+    if wert.lower() in ("1", "true", "ja", "yes"):
+        return True
+    if wert.lower() in ("0", "false", "nein", "no"):
+        return False
+    raise SystemExit(f"[Fehler] {name} muss 1 oder 0 sein, nicht {wert!r}.")
+
+
+# Sichere Standardwerte: nur lokal erreichbar, kein Debug-Modus, Cookies nur über HTTPS.
+# Abweichungen (z. B. 0.0.0.0 im Container) werden bewusst per Umgebungsvariable gesetzt.
+HOST = os.environ.get("GRADETRACK_HOST", "127.0.0.1")
+PORT = int(os.environ.get("GRADETRACK_PORT", "5000"))
+DEBUG = env_schalter("GRADETRACK_DEBUG", False)
+SECURE_COOKIES = env_schalter("GRADETRACK_SECURE_COOKIES", True)
+# Beispielbenutzer mit bekannten Passwörtern nur, wenn ausdrücklich gewünscht (Demo, Tests).
+DEMO_DATA = env_schalter("GRADETRACK_DEMO_DATA", False)
+
+# Fail securely: Ohne eigenen, ausreichend langen Schlüssel startet die App nicht.
+# Ein Standardwert im Code wäre für alle Installationen gleich und öffentlich bekannt.
+SECRET_KEY = os.environ.get("GRADETRACK_SECRET_KEY", "")
+if len(SECRET_KEY) < 32:
+    raise SystemExit(
+        "[Fehler] GRADETRACK_SECRET_KEY fehlt oder ist kürzer als 32 Zeichen.\n"
+        "Erzeugen z. B. mit: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+    )
 
 EDITABLE_FIELDS = [
     "module_code",
@@ -100,7 +125,8 @@ app = Flask(__name__)
 app.config.update(
     DATABASE=DATABASE,
     SECRET_KEY=SECRET_KEY,
-    ADMIN_API_TOKEN=ADMIN_API_TOKEN,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=SECURE_COOKIES,
     SESSION_COOKIE_SAMESITE="Lax",
 )
 csrf = CSRFProtect(app)
@@ -155,6 +181,12 @@ def close_db(e=None):
 def init_db():
     db = get_db()
     db.executescript(SCHEMA_SQL)
+    if DEMO_DATA:
+        lade_demodaten(db)
+    db.commit()
+
+
+def lade_demodaten(db):
     db.executemany(
         "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
         [
@@ -189,7 +221,6 @@ def init_db():
             (4, "INF-3002", 1.3, 5, 3, "2026-11-01", "Prüfungsleistung", "pending"),
         ],
     )
-    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +246,6 @@ def load_user():
         return None
 
     print(f"[auth] Anfrage mit Token: {token}")
-    if token == app.config["ADMIN_API_TOKEN"]:
-        return {"id": 0, "username": "admin", "full_name": "System Admin", "role": "registrar", "api_token": token}
-
     row = get_db().execute("SELECT * FROM users WHERE api_token = ?", (token,)).fetchone()
     if row is None:
         return None
@@ -733,16 +761,43 @@ def handle_error(e):
     return jsonify({"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()}), 500
 
 
+def lege_pruefungsamt_an(username):
+    """Legt einen Prüfungsamt-Zugang an. Das Passwort wird verdeckt abgefragt."""
+    passwort = getpass.getpass(f"Passwort für {username} (mind. 12 Zeichen): ")
+    if len(passwort) < 12:
+        raise SystemExit("[Fehler] Das Passwort muss mindestens 12 Zeichen lang sein.")
+    if getpass.getpass("Passwort wiederholen: ") != passwort:
+        raise SystemExit("[Fehler] Die Passwörter stimmen nicht überein.")
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
+            (username, "Prüfungsamt", weak_hash(passwort), "registrar", generate_token()),
+        )
+    except sqlite3.IntegrityError:
+        raise SystemExit(f"[Fehler] Benutzer {username!r} existiert bereits.") from None
+    db.commit()
+
+
 with app.app_context():
     if not os.path.exists(app.config["DATABASE"]):
         print("[db] Keine Datenbank gefunden, lege neue an ...")
         init_db()
+        if not DEMO_DATA:
+            print("[db] Ohne Beispieldaten angelegt. Zugang anlegen: python gradetrack.py --create-registrar <name>")
 
 
 if __name__ == "__main__":
     if "--init-db" in sys.argv:
         with app.app_context():
             init_db()
-            print("Datenbank frisch initialisiert.")
+            print("Datenbank frisch initialisiert" + (" (mit Beispieldaten)." if DEMO_DATA else " (leer)."))
+    elif "--create-registrar" in sys.argv:
+        position = sys.argv.index("--create-registrar")
+        if position + 1 >= len(sys.argv):
+            raise SystemExit("Aufruf: python gradetrack.py --create-registrar <benutzername>")
+        with app.app_context():
+            lege_pruefungsamt_an(sys.argv[position + 1])
+            print("Zugang angelegt.")
     else:
         app.run(host=HOST, port=PORT, debug=DEBUG)
