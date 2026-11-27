@@ -129,6 +129,8 @@ Rolle, **rot** nur das Prüfungsamt.
 python -m venv .venv
 source .venv/Scripts/activate
 python -m pip install --require-hashes -r requirements.txt
+export GRADETRACK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export GRADETRACK_DEMO_DATA=1 GRADETRACK_SECURE_COOKIES=0
 python gradetrack.py
 ```
 
@@ -137,12 +139,25 @@ python gradetrack.py
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --require-hashes -r requirements.txt
+export GRADETRACK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export GRADETRACK_DEMO_DATA=1 GRADETRACK_SECURE_COOKIES=0
 python gradetrack.py
 ```
 
 Die App läuft dann auf **http://localhost:5000**. Beim ersten Start wird die Datenbank
-`grades.db` automatisch mit Beispieldaten angelegt. Mit `python gradetrack.py --init-db`
-setzt ihr sie auf die Beispieldaten zurück.
+`grades.db` automatisch angelegt. Mit `python gradetrack.py --init-db` setzt ihr sie zurück.
+
+**Einstellungen** (siehe [`.env.example`](.env.example)):
+
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `GRADETRACK_SECRET_KEY` | Schlüssel für Session-Cookies, mind. 32 Zeichen. **Ohne ihn startet die App nicht.** | – |
+| `GRADETRACK_DEMO_DATA` | `1` legt Beispielbenutzer und -noten mit bekannten Passwörtern an (nur Demo und Tests) | `0` |
+| `GRADETRACK_SECURE_COOKIES` | `1` sendet das Session-Cookie nur über HTTPS. Für lokale Tests über `http://` auf `0` | `1` |
+| `GRADETRACK_HOST`, `GRADETRACK_PORT`, `GRADETRACK_DEBUG` | Nur für den Entwicklungsserver | `127.0.0.1`, `5000`, `0` |
+
+Ohne Beispieldaten legt ihr einen Zugang für das Prüfungsamt so an (das Passwort wird
+verdeckt abgefragt): `python gradetrack.py --create-registrar <name>`
 
 ### API ausprobieren
 
@@ -183,8 +198,11 @@ docker run --rm -p 127.0.0.1:8000:8000 \
 ```
 
 Die App läuft dann auf **http://localhost:8000**. Die Datenbank liegt im Volume
-`gradetrack-data` und bleibt bei einem Neustart erhalten. Zurücksetzen auf die Beispieldaten:
-`docker volume rm gradetrack-data`.
+`gradetrack-data` und bleibt bei einem Neustart erhalten. Zurücksetzen:
+`docker volume rm gradetrack-data`. Für die Demo mit Beispielbenutzern in `.env`
+`GRADETRACK_DEMO_DATA=1` setzen. Weil die App im Container nur per HTTP erreichbar ist,
+für lokale Tests im Browser außerdem `GRADETRACK_SECURE_COOKIES=0` (im Betrieb terminiert
+ein Reverse-Proxy HTTPS).
 
 **Was das Image absichert:**
 
@@ -210,7 +228,7 @@ python -m pip install pip-tools
 pip-compile --generate-hashes requirements.in
 ```
 
-Werkzeuge für die CI (`pip-audit`, `cyclonedx-bom`) stehen getrennt davon in `requirements-dev.in` und
+Werkzeuge für Entwicklung und CI (`pip-audit`, `cyclonedx-bom`, `pytest`, `bandit`, `mypy`, `pre-commit`) stehen getrennt davon in `requirements-dev.in` und
 sind genauso mit Hashes in `requirements-dev.txt` festgeschrieben. Erzeugt wird die Datei ohne
 Kommentare:
 
@@ -225,8 +243,8 @@ sed -i '/^#/d' requirements-dev.txt
 Der Workflow [`supply-chain.yml`](.github/workflows/supply-chain.yml) läuft bei jedem Push und
 Pull Request auf `main`, wöchentlich sowie manuell (*Actions → Supply Chain → Run workflow*):
 
-- **Pinning:** `scripts/check-pinning.sh` schlägt fehl, wenn eine GitHub Action nicht per
-  Commit-SHA oder ein Docker-Image nicht per Digest referenziert ist. Der zugehörige
+- **Pinning:** `scripts/check-pinning.sh` schlägt fehl, wenn eine GitHub Action oder ein
+  pre-commit-Hook nicht per Commit-SHA oder ein Docker-Image nicht per Digest referenziert ist. Der zugehörige
   Release-Tag jeder Action steht im Namen des jeweiligen Workflow-Schritts.
 - **Bekannte Sicherheitslücken:** `pip-audit` prüft alle Pakete aus `requirements.txt` gegen
   die Python Packaging Advisory Database und schlägt bei einem Fund fehl.
@@ -241,6 +259,45 @@ python -m pip install --require-hashes -r requirements-dev.txt
 pip-audit -r requirements.txt --require-hashes --disable-pip
 bash scripts/check-pinning.sh
 cyclonedx-py requirements requirements.txt --pyproject pyproject.toml --of JSON -o sbom.cdx.json
+```
+
+
+### Code Security prüfen
+
+Der Workflow [`code-security.yml`](.github/workflows/code-security.yml) läuft bei jedem Push und
+Pull Request auf `main` sowie manuell. Über *Actions → Code Security → Run workflow* lässt sich
+im Feld `ref` auch ein anderer Stand prüfen, z. B. `vulnerable`.
+
+- **SAST:** [Bandit](https://bandit.readthedocs.io/) prüft den Python-Code auf typische
+  Schwachstellen (SQL per String, schwache Hashes, hartkodierte Secrets, …).
+- **Secret Scanning:** [gitleaks](https://github.com/gitleaks/gitleaks) durchsucht die
+  **ganze Git-History**. Neben den Standardregeln erkennt [`.gitleaks.toml`](.gitleaks.toml)
+  GradeTrack-Tokens (`gt_…`) und fest eingetragene `SECRET_KEY`-Werte.
+- **Type Checker:** `mypy` im Modus `strict` (Konfiguration in `pyproject.toml`).
+- **Fail Fast:** [`tests/test_fail_fast.py`](tests/test_fail_fast.py) prüft, dass ungültige
+  Eingaben sofort mit 400 abgelehnt werden. Die Tests laufen mit allen anderen im Workflow
+  *Dynamictest*.
+
+Jeder Fund lässt den Lauf fehlschlagen. Die Ergebnisse stehen in der Zusammenfassung des Laufs
+und als Artefakte (`bandit-report`, `gitleaks-report`, `mypy-report`). Nachweise, dass die
+Werkzeuge echte Probleme finden, liegen in [`docs/evidence/`](docs/evidence/)
+(`code-security_*_positivtest.txt`).
+
+Dieselben Prüfungen laufen vor jedem Commit über [pre-commit](https://pre-commit.com/):
+
+```bash
+source .venv/Scripts/activate        # unter Linux/macOS: source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+pre-commit install                   # einmalig: Hook in .git/hooks eintragen
+pre-commit run --all-files           # alle Prüfungen von Hand ausführen
+```
+
+Lokal einzeln ausführen:
+
+```bash
+bandit -c pyproject.toml -r .
+mypy
+python -m pytest tests/test_fail_fast.py
 ```
 
 ---

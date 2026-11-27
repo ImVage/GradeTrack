@@ -1,0 +1,22 @@
+Positivtest Secret Scanning (gitleaks v8.30.1, ganze Git-History)
+Quelle: GitHub Actions, Lauf https://github.com/ImVage/GradeTrack/actions/runs/45977822347 (Code Security #1, Job "Secret Scanning (gitleaks)")
+        Artefakt "gitleaks-report", PR #13 (Branch ci/code-security, Commit 4a3b1b9), 27.11.2026
+Geprüft wird der noch unsichere Anwendungscode von main (Stand nach PR #12).
+Ergebnis: 2 Funde im Ausgangscommit 20fdb68, Job fehlgeschlagen. Werte geschwärzt (--redact).
+Mit den Standardregeln allein findet gitleaks diese beiden Secrets nicht; erkannt werden sie
+durch die eigenen Regeln in .gitleaks.toml (gradetrack-api-token, flask-secret-key).
+Autor und E-Mail aus dem Bericht sind weggelassen.
+================================================================================
+Regel:    flask-secret-key (Fest eingetragener Flask SECRET_KEY)
+Fund:     SECRET_KEY = "REDACTED"
+Secret:   REDACTED
+Datei:    gradetrack.py:43
+Commit:   20fdb686a39efe53322e450f039706983a3b9692 (Ausgangsstand, 2026-11-01)
+Fingerprint: 20fdb686a39efe53322e450f039706983a3b9692:gradetrack.py:flask-secret-key:43
+
+Regel:    gradetrack-api-token (GradeTrack API-Token)
+Fund:     REDACTED
+Secret:   REDACTED
+Datei:    gradetrack.py:44
+Commit:   20fdb686a39efe53322e450f039706983a3b9692 (Ausgangsstand, 2026-11-01)
+Fingerprint: 20fdb686a39efe53322e450f039706983a3b9692:gradetrack.py:gradetrack-api-token:44

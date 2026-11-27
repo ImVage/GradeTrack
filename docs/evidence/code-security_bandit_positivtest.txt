@@ -1,0 +1,90 @@
+Positivtest SAST (Bandit 1.9.4)
+Quelle: GitHub Actions, Lauf https://github.com/ImVage/GradeTrack/actions/runs/45977822347 (Code Security #1, Job "SAST (Bandit)")
+        Artefakt "bandit-report", PR #13 (Branch ci/code-security, Commit 4a3b1b9), 27.11.2026
+Geprüft wird der noch unsichere Anwendungscode von main (Stand nach PR #12).
+Ergebnis: 6 Funde (1 High, 2 Medium, 3 Low), Job fehlgeschlagen.
+Die Werte der hartkodierten Secrets sind in dieser Datei geschwärzt (REDACTED).
+Hinweis: Die SQL-Injection in GET /grades und GET /modules (Abfrage per += zusammengesetzt)
+erkennt Bandit nicht (False Negative), weil es den Datenfluss nicht verfolgt.
+================================================================================
+Run started:2026-11-27 09:56:27.344561+00:00
+
+Test results:
+>> Issue: [B104:hardcoded_bind_all_interfaces] Possible binding to all interfaces.
+   Severity: Medium   Confidence: Medium
+   CWE: CWE-605 (https://cwe.mitre.org/data/definitions/605.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b104_hardcoded_bind_all_interfaces.html
+   Location: ./gradetrack.py:42:7
+41	
+42	HOST = "0.0.0.0"
+43	PORT = 5000
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'REDACTED'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./gradetrack.py:46:13
+45	
+46	SECRET_KEY = "REDACTED"
+47	ADMIN_API_TOKEN = "REDACTED"
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'REDACTED'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./gradetrack.py:47:18
+46	SECRET_KEY = "REDACTED"
+47	ADMIN_API_TOKEN = "REDACTED"
+48	
+
+--------------------------------------------------
+>> Issue: [B324:hashlib] Use of weak MD5 hash for security. Consider usedforsecurity=False
+   Severity: High   Confidence: High
+   CWE: CWE-327 (https://cwe.mitre.org/data/definitions/327.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b324_hashlib.html
+   Location: ./gradetrack.py:134:11
+133	def weak_hash(password):
+134	    return hashlib.md5(password.encode("utf-8")).hexdigest()
+135	
+
+--------------------------------------------------
+>> Issue: [B311:blacklist] Standard pseudo-random generators are not suitable for security/cryptographic purposes.
+   Severity: Low   Confidence: High
+   CWE: CWE-330 (https://cwe.mitre.org/data/definitions/330.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_calls.html#b311-random
+   Location: ./gradetrack.py:138:19
+137	def generate_token():
+138	    return "".join(random.choices(string.ascii_letters + string.digits, k=16))
+139	
+
+--------------------------------------------------
+>> Issue: [B608:hardcoded_sql_expressions] Possible SQL injection vector through string-based query construction.
+   Severity: Medium   Confidence: Medium
+   CWE: CWE-89 (https://cwe.mitre.org/data/definitions/89.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html
+   Location: ./gradetrack.py:616:17
+615	    values = [data[k] for k in fields] + [grade_id]
+616	    db.execute(f"UPDATE grades SET {set_clause} WHERE id = ?", values)
+617	    db.commit()
+
+--------------------------------------------------
+
+Code scanned:
+	Total lines of code: 596
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 0
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 3
+		Medium: 2
+		High: 1
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 0
+		Medium: 4
+		High: 2
+Files skipped (0):

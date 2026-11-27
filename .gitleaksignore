@@ -1,0 +1,8 @@
+# Bewusst ausgenommene gitleaks-Funde (Fingerprint je Zeile).
+#
+# Beide Secrets standen im Ausgangsstand (Commit 20fdb68) fest im Code und bleiben für
+# immer in der Git-History. Sie sind entfernt und gelten als kompromittiert: Die App
+# liest SECRET_KEY jetzt aus GRADETRACK_SECRET_KEY (jede Installation eigener Wert), und
+# den Admin-Token gibt es nicht mehr. Neue Funde schlagen weiterhin an.
+20fdb686a39efe53322e450f039706983a3b9692:gradetrack.py:flask-secret-key:43
+20fdb686a39efe53322e450f039706983a3b9692:gradetrack.py:gradetrack-api-token:44

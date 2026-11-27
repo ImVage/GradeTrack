@@ -12,3 +12,18 @@ authors = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.bandit]
+# Geprüft wird der Anwendungscode. Tests nutzen bewusst assert und Demo-Passwörter.
+exclude_dirs = ["tests", ".venv", "venv"]
+
+[tool.mypy]
+python_version = "3.14"
+files = ["gradetrack.py", "schemas.py"]
+strict = true
+plugins = ["pydantic.mypy"]
+
+# Flask-WTF liefert keine Typinformationen mit. Nur dieses Paket wird ausgenommen.
+[[tool.mypy.overrides]]
+module = ["flask_wtf", "flask_wtf.*"]
+ignore_missing_imports = true

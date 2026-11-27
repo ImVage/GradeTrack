@@ -25,7 +25,11 @@ jobs:
 
       - name: GradeTrack starten
         run: |
-          docker run -d --name gradetrack -p 127.0.0.1:8000:8000 gradetrack:latest
+          # Zufälliger Schlüssel nur für diesen Lauf; Beispielbenutzer für die Anmeldung des Scans.
+          docker run -d --name gradetrack -p 127.0.0.1:8000:8000 \
+            -e GRADETRACK_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+            -e GRADETRACK_DEMO_DATA=1 \
+            gradetrack:latest
           for _ in $(seq 1 30); do
             if curl -fsS "$ZIEL/health" > /dev/null; then exit 0; fi
             sleep 1

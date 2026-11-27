@@ -1,0 +1,35 @@
+# gitleaks-Konfiguration für GradeTrack
+#
+# Basis sind die Standardregeln von gitleaks. Dazu kommen zwei Regeln für Secrets, die die
+# Standardregeln in GradeTrack nicht erkennen (Positivtest am Ausgangsstand, siehe
+# docs/evidence/code-security_gitleaks_positivtest.txt).
+
+title = "GradeTrack"
+
+[extend]
+useDefault = true
+
+# API-Tokens von GradeTrack haben das Präfix "gt_" (wie z. B. "ghp_" bei GitHub).
+[[rules]]
+id = "gradetrack-api-token"
+description = "GradeTrack API-Token"
+regex = '''\bgt_[A-Za-z0-9_\-]{20,}'''
+keywords = ["gt_"]
+
+# Flask signiert Session-Cookies mit SECRET_KEY. Ein fest eingetragener Wert erlaubt es,
+# beliebige Sessions zu fälschen.
+[[rules]]
+id = "flask-secret-key"
+description = "Fest eingetragener Flask SECRET_KEY"
+regex = '''(?i)\bSECRET_KEY\b\s*[:=]\s*["']([^"'\s]{8,})["']'''
+secretGroup = 1
+keywords = ["secret_key"]
+
+# Bewusste Ausnahmen: Testdaten sind keine echten Zugangsdaten.
+[[allowlists]]
+description = "Testdaten in tests/ (Demo-Passwörter, keine echten Secrets)"
+paths = ['''^tests/''']
+
+[[allowlists]]
+description = "Geschwärzte Werte in Nachweisen (docs/evidence) sind keine Secrets"
+regexes = ['''^REDACTED$''']
