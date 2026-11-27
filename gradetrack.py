@@ -8,11 +8,14 @@ import secrets
 import sqlite3
 import sys
 import uuid
-from datetime import UTC, datetime
+from collections.abc import Callable, Mapping
+from datetime import UTC, date, datetime
+from typing import Any, cast
 
 try:
     from flask import (
         Flask,
+        Response,
         flash,
         g,
         jsonify,
@@ -22,8 +25,9 @@ try:
         session,
         url_for,
     )
+    from flask.typing import ResponseReturnValue
     from flask_wtf.csrf import CSRFProtect
-    from pydantic import ValidationError
+    from pydantic import BaseModel, ValidationError
     from werkzeug.exceptions import HTTPException, UnsupportedMediaType
     from werkzeug.security import check_password_hash, generate_password_hash
 except ImportError:
@@ -36,6 +40,10 @@ except ImportError:
 
 import schemas
 
+# Eine Datenbankzeile als Dictionary (Spaltenname -> Wert).
+Zeile = dict[str, Any]
+View = Callable[..., ResponseReturnValue]
+
 # ---------------------------------------------------------------------------
 # Logging: eine JSON-Zeile pro Ereignis nach STDOUT, maschinenlesbar.
 # Niemals Passwörter, Tokens, Hashes oder SQL-Text loggen.
@@ -43,7 +51,7 @@ import schemas
 
 
 class JsonFormat(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         eintrag = {
             "time": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
             "level": record.levelname,
@@ -63,7 +71,7 @@ log.setLevel(logging.INFO)
 log.propagate = False
 
 
-def protokolliere(ereignis, stufe=logging.INFO, **felder):
+def protokolliere(ereignis: str, stufe: int = logging.INFO, **felder: object) -> None:
     log.log(stufe, ereignis, extra={"felder": felder})
 
 
@@ -77,7 +85,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.environ.get("GRADETRACK_DB", os.path.join(BASE_DIR, "grades.db"))
 
 
-def env_schalter(name, standard):
+def env_schalter(name: str, standard: bool) -> bool:
     """Liest einen Ja/Nein-Schalter aus der Umgebung. Unbekannte Werte sind ein Fehler."""
     wert = os.environ.get(name)
     if wert is None or wert == "":
@@ -155,6 +163,17 @@ app.config.update(
 )
 csrf = CSRFProtect(app)
 
+
+def ohne_csrf(view: View) -> View:
+    """Nimmt einen JSON-Endpunkt vom CSRF-Token aus.
+
+    Schutz trotzdem: Das Session-Cookie ist SameSite=Lax und wird bei POST/PUT/DELETE von
+    fremden Seiten nicht mitgeschickt; API-Clients melden sich per Token im Header an.
+    Endpunkte mit Body verlangen zusätzlich application/json, was ein fremdes Formular
+    nicht senden kann.
+    """
+    return cast(View, csrf.exempt(view))
+
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; object-src 'none'; base-uri 'self'; "
@@ -170,13 +189,13 @@ SECURITY_HEADERS = {
 
 
 @app.after_request
-def set_security_headers(response):
+def set_security_headers(response: Response) -> Response:
     response.headers.update(SECURITY_HEADERS)
     return response
 
 
 @app.after_request
-def protokolliere_anfrage(response):
+def protokolliere_anfrage(response: Response) -> Response:
     benutzer = g.get("user")
     protokolliere(
         "request",
@@ -193,7 +212,7 @@ def protokolliere_anfrage(response):
 # ---------------------------------------------------------------------------
 
 
-def hash_passwort(passwort):
+def hash_passwort(passwort: str) -> str:
     """Gesalzener, absichtlich langsamer Hash (scrypt), kein eigenes Verfahren."""
     return generate_password_hash(passwort)
 
@@ -203,31 +222,31 @@ def hash_passwort(passwort):
 DUMMY_HASH = hash_passwort(secrets.token_urlsafe(16))
 
 
-def neues_token():
+def neues_token() -> str:
     """Kryptografisch zufälliges API-Token mit erkennbarem Präfix (für Secret Scanner)."""
     return "gt_" + secrets.token_urlsafe(32)
 
 
-def token_hash(token):
+def token_hash(token: str) -> str:
     """In der Datenbank steht nur der Hash. Ein Datenbank-Leak verrät keine gültigen Tokens."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def get_db():
+def get_db() -> sqlite3.Connection:
     if "db" not in g:
         g.db = sqlite3.connect(app.config["DATABASE"])
         g.db.row_factory = sqlite3.Row
-    return g.db
+    return cast(sqlite3.Connection, g.db)
 
 
 @app.teardown_appcontext
-def close_db(e=None):
+def close_db(e: BaseException | None = None) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
 
 
-def init_db():
+def init_db() -> None:
     db = get_db()
     db.executescript(SCHEMA_SQL)
     if DEMO_DATA:
@@ -236,13 +255,13 @@ def init_db():
 
 
 @functools.cache
-def demo_hash(passwort):
+def demo_hash(passwort: str) -> str:
     # scrypt ist absichtlich langsam. Die Demo-Hashes werden pro Prozess nur einmal berechnet,
     # sonst dauert jedes Zurücksetzen der Datenbank (z. B. in den Tests) spürbar länger.
     return hash_passwort(passwort)
 
 
-def lade_demodaten(db):
+def lade_demodaten(db: sqlite3.Connection) -> None:
     db.executemany(
         "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
         [
@@ -287,12 +306,12 @@ def lade_demodaten(db):
 # ---------------------------------------------------------------------------
 
 
-def get_token():
+def get_token() -> str | None:
     # Nur im Header. Tokens in der URL landen in Server-Logs, im Browserverlauf und im Referer.
     return request.headers.get("X-API-Token")
 
 
-def load_user():
+def load_user() -> Zeile | None:
     if "user_id" in session:
         row = get_db().execute("SELECT * FROM users WHERE id = ?", (session["user_id"],)).fetchone()
         if row is not None:
@@ -308,7 +327,11 @@ def load_user():
     return dict(row)
 
 
-def authenticate_credentials(username, password):
+# Eine Meldung für unbekannte Namen und falsche Passwörter (keine User Enumeration).
+LOGIN_FEHLER = "Benutzername oder Passwort falsch"
+
+
+def authenticate_credentials(username: str, password: str) -> Zeile | None:
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     # Eine Meldung für beide Fälle, sonst ließe sich ausprobieren, welche Namen existieren.
@@ -316,15 +339,15 @@ def authenticate_credentials(username, password):
     if not check_password_hash(gespeichert, password) or row is None:
         # Name (geprüft, max. 64 Zeichen, JSON-kodiert) ja, Passwort nie.
         protokolliere("login_failed", logging.WARNING, username=username)
-        return None, "Benutzername oder Passwort falsch"
+        return None
 
     protokolliere("login_ok", user_id=row["id"])
-    return dict(row), None
+    return dict(row)
 
 
-def login_required(view):
+def login_required(view: View) -> View:
     @functools.wraps(view)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: Any, **kwargs: Any) -> ResponseReturnValue:
         user = load_user()
         if user is None:
             return jsonify({"error": "Nicht angemeldet"}), 401
@@ -334,10 +357,10 @@ def login_required(view):
     return wrapped
 
 
-def registrar_required(view):
+def registrar_required(view: View) -> View:
     @functools.wraps(view)
     @login_required
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: Any, **kwargs: Any) -> ResponseReturnValue:
         if g.user["role"] != "registrar":
             return jsonify({"error": "Nur für das Prüfungsamt"}), 403
         return view(*args, **kwargs)
@@ -353,13 +376,13 @@ def registrar_required(view):
 class UngueltigeEingabe(Exception):
     """Eingabe verletzt das Schema oder eine Fachregel. Wird zentral mit 400 beantwortet."""
 
-    def __init__(self, meldung, details=None):
+    def __init__(self, meldung: str, details: list[dict[str, str]] | None = None) -> None:
         super().__init__(meldung)
         self.meldung = meldung
         self.details = details or []
 
 
-def fehlerliste(fehler):
+def fehlerliste(fehler: ValidationError) -> list[dict[str, str]]:
     # Nur Feld und Regel, nie den Eingabewert selbst: Die Antwort spiegelt nichts zurück.
     return [
         {"feld": ".".join(str(teil) for teil in e["loc"]) or "eingabe", "meldung": e["msg"]}
@@ -367,14 +390,14 @@ def fehlerliste(fehler):
     ]
 
 
-def pruefe(modell, daten, strict=True):
+def pruefe[M: BaseModel](modell: type[M], daten: Mapping[str, Any], strict: bool = True) -> M:
     try:
         return modell.model_validate(daten, strict=strict)
     except ValidationError as fehler:
         raise UngueltigeEingabe("Ungültige Eingabe", fehlerliste(fehler)) from None
 
 
-def json_eingabe(modell):
+def json_eingabe[M: BaseModel](modell: type[M]) -> M:
     """JSON-Body gegen ein Schema prüfen. Typen müssen exakt passen ("5" ist keine Zahl)."""
     if not request.is_json:
         raise UnsupportedMediaType("Content-Type muss application/json sein")
@@ -384,18 +407,20 @@ def json_eingabe(modell):
         raise UngueltigeEingabe("Ungültige Eingabe", fehlerliste(fehler)) from None
 
 
-def parameter_eingabe(modell, quelle, auslassen=("csrf_token",)):
+def parameter_eingabe[M: BaseModel](
+    modell: type[M], quelle: Mapping[str, str], auslassen: tuple[str, ...] = ("csrf_token",)
+) -> M:
     """URL-Parameter und Formularfelder prüfen. Sie sind immer Text, leere Felder gelten als nicht gesetzt."""
     daten = {k: v for k, v in quelle.items() if v != "" and k not in auslassen}
     return pruefe(modell, daten, strict=False)
 
 
-def pruefe_modul_existiert(code):
+def pruefe_modul_existiert(code: str) -> None:
     if get_db().execute("SELECT 1 FROM modules WHERE code = ?", (code,)).fetchone() is None:
         raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "module_code", "meldung": "Modul existiert nicht"}])
 
 
-def pruefe_ist_student(student_id):
+def pruefe_ist_student(student_id: int) -> None:
     zeile = get_db().execute("SELECT role FROM users WHERE id = ?", (student_id,)).fetchone()
     if zeile is None or zeile["role"] != "student":
         raise UngueltigeEingabe(
@@ -403,17 +428,17 @@ def pruefe_ist_student(student_id):
         )
 
 
-def als_text(datum):
+def als_text(datum: date | None) -> str | None:
     return datum.isoformat() if datum is not None else None
 
 
-def flash_fehler(fehler):
+def flash_fehler(fehler: UngueltigeEingabe) -> None:
     details = "; ".join(f"{d['feld']}: {d['meldung']}" for d in fehler.details)
     flash(f"{fehler.meldung}: {details}" if details else fehler.meldung, "error")
 
 
 @app.errorhandler(UngueltigeEingabe)
-def ungueltige_eingabe(fehler):
+def ungueltige_eingabe(fehler: UngueltigeEingabe) -> ResponseReturnValue:
     return jsonify({"error": fehler.meldung, "details": fehler.details}), 400
 
 
@@ -432,11 +457,11 @@ SORTIERUNG_SQL = {
 }
 
 
-def ist_pruefungsamt(user):
-    return user["role"] == "registrar"
+def ist_pruefungsamt(user: Zeile) -> bool:
+    return bool(user["role"] == "registrar")
 
 
-def sichtbare_note(note_id, user):
+def sichtbare_note(note_id: int, user: Zeile) -> Zeile | None:
     """Liefert die Note, wenn die Person sie sehen darf, sonst None.
 
     Studierende sehen nur eigene Noten. Fremde Noten werden wie nicht vorhandene behandelt
@@ -450,7 +475,7 @@ def sichtbare_note(note_id, user):
     return dict(zeile)
 
 
-def ziel_student(student_id, user):
+def ziel_student(student_id: int | None, user: Zeile) -> int:
     """Studierende tragen nur für sich selbst ein, das Prüfungsamt für eine/n Studierende/n."""
     if ist_pruefungsamt(user):
         if student_id is None:
@@ -459,10 +484,10 @@ def ziel_student(student_id, user):
         return student_id
     if student_id is not None and student_id != user["id"]:
         raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "student_id", "meldung": "Nur für sich selbst"}])
-    return user["id"]
+    return int(user["id"])
 
 
-def like_muster(text):
+def like_muster(text: str) -> str:
     """Suchtext für LIKE: % und _ gelten als normale Zeichen, nicht als Platzhalter."""
     maskiert = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{maskiert}%"
@@ -474,23 +499,23 @@ def like_muster(text):
 
 
 @app.get("/login")
-def login_page():
+def login_page() -> ResponseReturnValue:
     if load_user():
         return redirect(url_for("dashboard"))
     return render_template("login.html")
 
 
 @app.post("/login")
-def login_submit():
+def login_submit() -> ResponseReturnValue:
     try:
         eingabe = parameter_eingabe(schemas.LoginEingabe, request.form)
     except UngueltigeEingabe:
-        flash("Benutzername oder Passwort falsch", "error")
+        flash(LOGIN_FEHLER, "error")
         return redirect(url_for("login_page"))
 
-    user, error = authenticate_credentials(eingabe.username, eingabe.password)
-    if error:
-        flash(error, "error")
+    user = authenticate_credentials(eingabe.username, eingabe.password)
+    if user is None:
+        flash(LOGIN_FEHLER, "error")
         return redirect(url_for("login_page"))
 
     session["user_id"] = user["id"]
@@ -499,14 +524,14 @@ def login_submit():
 
 
 @app.get("/logout")
-def logout():
+def logout() -> ResponseReturnValue:
     session.clear()
     flash("Du wurdest abgemeldet.", "info")
     return redirect(url_for("login_page"))
 
 
 @app.get("/")
-def dashboard():
+def dashboard() -> ResponseReturnValue:
     user = load_user()
     if not user:
         return redirect(url_for("login_page"))
@@ -534,7 +559,7 @@ def dashboard():
         "LEFT JOIN modules m ON g.module_code = m.code "
         "WHERE 1=1"
     )
-    params = []
+    params: list[object] = []
     if semester:
         query += " AND g.semester = ?"
         params.append(semester)
@@ -561,7 +586,7 @@ def dashboard():
         sem_ects[s] = sem_ects.get(s, 0) + g["ects"]
 
     mod_query = "SELECT * FROM modules"
-    mod_params = []
+    mod_params: list[object] = []
     if search:
         mod_query += " WHERE title LIKE ? ESCAPE '\\' OR code LIKE ? ESCAPE '\\'"
         mod_params = [like_muster(search), like_muster(search)]
@@ -610,7 +635,7 @@ def dashboard():
 
 
 @app.post("/ui/grades/add")
-def ui_add_grade():
+def ui_add_grade() -> ResponseReturnValue:
     user = load_user()
     if not user:
         return redirect(url_for("login_page"))
@@ -644,7 +669,7 @@ def ui_add_grade():
 
 
 @app.post("/ui/grades/<int:grade_id>/approve")
-def ui_approve_grade(grade_id):
+def ui_approve_grade(grade_id: int) -> ResponseReturnValue:
     user = load_user()
     if not user or user["role"] != "registrar":
         flash("Nur das Prüfungsamt darf Noten bestätigen!", "error")
@@ -661,7 +686,7 @@ def ui_approve_grade(grade_id):
 
 
 @app.post("/ui/grades/<int:grade_id>/delete")
-def ui_delete_grade(grade_id):
+def ui_delete_grade(grade_id: int) -> ResponseReturnValue:
     user = load_user()
     if not user or user["role"] != "registrar":
         flash("Nur das Prüfungsamt darf Noten löschen!", "error")
@@ -678,7 +703,7 @@ def ui_delete_grade(grade_id):
 
 
 @app.post("/ui/modules/add")
-def ui_add_module():
+def ui_add_module() -> ResponseReturnValue:
     user = load_user()
     if not user:
         return redirect(url_for("login_page"))
@@ -707,7 +732,7 @@ def ui_add_module():
 
 
 @app.post("/ui/users/add")
-def ui_add_user():
+def ui_add_user() -> ResponseReturnValue:
     user = load_user()
     if not user or user["role"] != "registrar":
         flash("Nur das Prüfungsamt darf Benutzer anlegen!", "error")
@@ -741,17 +766,17 @@ def ui_add_user():
 
 
 @app.get("/health")
-def health():
+def health() -> ResponseReturnValue:
     return jsonify({"status": "ok"})
 
 
 @app.post("/auth/login")
-@csrf.exempt
-def api_login():
+@ohne_csrf
+def api_login() -> ResponseReturnValue:
     eingabe = json_eingabe(schemas.LoginEingabe)
-    user, error = authenticate_credentials(eingabe.username, eingabe.password)
-    if error:
-        return jsonify({"error": error}), 401
+    user = authenticate_credentials(eingabe.username, eingabe.password)
+    if user is None:
+        return jsonify({"error": LOGIN_FEHLER}), 401
 
     # Jeder API-Login stellt ein neues Token aus und macht das alte ungültig. Gespeichert
     # wird nur der Hash, das Token selbst sieht der Client genau einmal.
@@ -773,15 +798,15 @@ def api_login():
 
 
 @app.post("/auth/logout")
-@csrf.exempt
-def api_logout():
+@ohne_csrf
+def api_logout() -> ResponseReturnValue:
     session.clear()
     return jsonify({"message": "Abgemeldet"})
 
 
 @app.get("/grades")
 @login_required
-def list_grades():
+def list_grades() -> ResponseReturnValue:
     filter_ = parameter_eingabe(schemas.NotenFilter, request.args)
     student_id = filter_.student_id
     if not ist_pruefungsamt(g.user):
@@ -791,7 +816,7 @@ def list_grades():
 
     # Alle Werte als Parameter (?). Die Abfrage selbst besteht nur aus festen Bausteinen.
     query = "SELECT * FROM grades WHERE 1=1"
-    params = []
+    params: list[object] = []
     if filter_.semester is not None:
         query += " AND semester = ?"
         params.append(filter_.semester)
@@ -809,7 +834,7 @@ def list_grades():
 
 @app.get("/grades/<int:grade_id>")
 @login_required
-def get_grade(grade_id):
+def get_grade(grade_id: int) -> ResponseReturnValue:
     note = sichtbare_note(grade_id, g.user)
     if note is None:
         return jsonify({"error": "Note nicht gefunden"}), 404
@@ -817,9 +842,9 @@ def get_grade(grade_id):
 
 
 @app.post("/grades")
-@csrf.exempt
+@ohne_csrf
 @login_required
-def create_grade():
+def create_grade() -> ResponseReturnValue:
     note = json_eingabe(schemas.NoteNeu)
     pruefe_modul_existiert(note.module_code)
     student_id = ziel_student(note.student_id, g.user)
@@ -847,9 +872,9 @@ def create_grade():
 
 
 @app.put("/grades/<int:grade_id>")
-@csrf.exempt
+@ohne_csrf
 @login_required
-def update_grade(grade_id):
+def update_grade(grade_id: int) -> ResponseReturnValue:
     note = sichtbare_note(grade_id, g.user)
     if note is None:
         return jsonify({"error": "Note nicht gefunden"}), 404
@@ -884,9 +909,9 @@ def update_grade(grade_id):
 
 
 @app.post("/grades/<int:grade_id>/approve")
-@csrf.exempt
+@ohne_csrf
 @registrar_required
-def approve_grade(grade_id):
+def approve_grade(grade_id: int) -> ResponseReturnValue:
     db = get_db()
     cur = db.execute(
         "UPDATE grades SET status = 'approved', approved_by = ?, approved_at = ? WHERE id = ?",
@@ -900,9 +925,9 @@ def approve_grade(grade_id):
 
 
 @app.delete("/grades/<int:grade_id>")
-@csrf.exempt
+@ohne_csrf
 @registrar_required
-def delete_grade(grade_id):
+def delete_grade(grade_id: int) -> ResponseReturnValue:
     db = get_db()
     cur = db.execute("DELETE FROM grades WHERE id = ?", (grade_id,))
     db.commit()
@@ -912,10 +937,10 @@ def delete_grade(grade_id):
 
 
 @app.get("/modules")
-def list_modules():
+def list_modules() -> ResponseReturnValue:
     search = parameter_eingabe(schemas.ModulSuche, request.args).search
     query = "SELECT * FROM modules"
-    params = []
+    params: list[object] = []
     if search:
         query += " WHERE title LIKE ? ESCAPE '\\' OR code LIKE ? ESCAPE '\\'"
         params = [like_muster(search), like_muster(search)]
@@ -924,9 +949,9 @@ def list_modules():
 
 
 @app.post("/modules")
-@csrf.exempt
+@ohne_csrf
 @registrar_required
-def create_module():
+def create_module() -> ResponseReturnValue:
     modul = json_eingabe(schemas.ModulNeu)
     db = get_db()
     try:
@@ -942,7 +967,7 @@ def create_module():
 
 @app.get("/stats/ects")
 @login_required
-def ects_stats():
+def ects_stats() -> ResponseReturnValue:
     filter_ = parameter_eingabe(schemas.StatistikFilter, request.args)
     student_id = filter_.student_id or g.user["id"]
     if not ist_pruefungsamt(g.user) and student_id != g.user["id"]:
@@ -950,7 +975,7 @@ def ects_stats():
     semester = filter_.semester
 
     query = "SELECT grade, ects FROM grades WHERE student_id = ?"
-    params = [student_id]
+    params: list[object] = [student_id]
     if semester:
         query += " AND semester = ?"
         params.append(semester)
@@ -977,15 +1002,15 @@ def ects_stats():
 
 @app.get("/users")
 @registrar_required
-def list_users():
+def list_users() -> ResponseReturnValue:
     rows = get_db().execute("SELECT id, username, full_name, role FROM users").fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.post("/users")
-@csrf.exempt
+@ohne_csrf
 @registrar_required
-def create_user():
+def create_user() -> ResponseReturnValue:
     neu = json_eingabe(schemas.BenutzerNeu)
     full_name = neu.full_name or neu.username
     db = get_db()
@@ -1005,9 +1030,9 @@ def create_user():
 
 
 @app.errorhandler(Exception)
-def handle_error(e):
+def handle_error(e: Exception) -> ResponseReturnValue:
     if isinstance(e, HTTPException):
-        return jsonify({"error": e.description}), e.code
+        return jsonify({"error": e.description}), e.code or 500
     # Stacktrace, Fehlertyp und Pfade verraten Interna. Sie gehen nur ins Log,
     # die Antwort enthält eine ID, über die sich der Eintrag dort finden lässt.
     fehler_id = uuid.uuid4().hex[:12]
@@ -1015,7 +1040,7 @@ def handle_error(e):
     return jsonify({"error": "Interner Fehler", "error_id": fehler_id}), 500
 
 
-def lege_pruefungsamt_an(username):
+def lege_pruefungsamt_an(username: str) -> None:
     """Legt einen Prüfungsamt-Zugang an. Das Passwort wird verdeckt abgefragt."""
     passwort = getpass.getpass(f"Passwort für {username} (mind. 12 Zeichen): ")
     if len(passwort) < 12:
