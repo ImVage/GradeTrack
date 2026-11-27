@@ -102,7 +102,7 @@ Rolle, **rot** nur das Prüfungsamt.
 
 | Methode | Pfad | Zweck | Zugriff |
 |---|---|---|---|
-| GET | `/health` | Statusprüfung | öffentlich |
+| GET | `/health` | Statusprüfung inkl. Datenbank (`200` ok, `503` gestört) | öffentlich |
 | POST | `/auth/login`, `/auth/logout` | An- und Abmeldung, liefert API-Token | öffentlich |
 | GET | `/modules` | Module suchen (`search`) | öffentlich |
 | POST | `/modules` | Modul anlegen | angemeldet |
@@ -216,6 +216,29 @@ ein Reverse-Proxy HTTPS).
   [`.dockerignore`](.dockerignore) aus. Einstellungen kommen erst beim Start per `--env-file`.
 - **Nur lokal erreichbar:** `-p 127.0.0.1:8000:8000` gibt den Port nur auf dem eigenen
   Rechner frei, nicht im ganzen Netz.
+
+### Health Check
+
+`GET /health` prüft, ob die App ihre Datenbank wirklich nutzen kann: Die Datei muss
+vorhanden und lesbar sein und die Tabellen `users`, `modules` und `grades` enthalten. Die
+Verbindung ist schreibgeschützt (`mode=ro`), der Check legt also nie versehentlich eine
+leere Datenbank an.
+
+| Zustand | HTTP-Status | Antwort |
+|---|---|---|
+| gesund | `200` | `{"status": "ok", "checks": {"database": "ok"}}` |
+| gestört | `503` | `{"status": "error", "checks": {"database": "error"}}` |
+
+Die Antwort verrät keine Pfade oder Fehlermeldungen. Den Grund schreibt die App als
+JSON-Zeile `health_failed` (mit `check` und `reason`) ins Log.
+
+Im Container ruft Docker den Endpunkt über den `HEALTHCHECK` im [`Dockerfile`](Dockerfile)
+alle 30 Sekunden auf. Nach drei Fehlschlägen hintereinander gilt der Container als
+`unhealthy`. Den Zustand zeigt `docker ps` in der Spalte `STATUS`, Details liefert:
+
+```bash
+docker inspect --format '{{json .State.Health}}' <container>
+```
 
 ### Abhängigkeiten
 

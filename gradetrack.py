@@ -10,6 +10,7 @@ import sys
 import uuid
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any, cast
 
 try:
@@ -765,9 +766,36 @@ def ui_add_user() -> ResponseReturnValue:
 # ---------------------------------------------------------------------------
 
 
+BENOETIGTE_TABELLEN = frozenset({"users", "modules", "grades"})
+
+
+def pruefe_datenbank() -> bool:
+    pfad = Path(os.path.abspath(app.config["DATABASE"]))
+    try:
+        verbindung = sqlite3.connect(f"{pfad.as_uri()}?mode=ro", uri=True, timeout=2)
+        try:
+            tabellen = {
+                zeile[0] for zeile in verbindung.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+        finally:
+            verbindung.close()
+    except sqlite3.Error as fehler:
+        protokolliere("health_failed", logging.ERROR, check="database", reason=type(fehler).__name__)
+        return False
+    fehlend = BENOETIGTE_TABELLEN - tabellen
+    if fehlend:
+        protokolliere(
+            "health_failed", logging.ERROR, check="database", reason="schema_incomplete", missing=sorted(fehlend)
+        )
+        return False
+    return True
+
+
 @app.get("/health")
 def health() -> ResponseReturnValue:
-    return jsonify({"status": "ok"})
+    datenbank_ok = pruefe_datenbank()
+    antwort = {"status": "ok" if datenbank_ok else "error", "checks": {"database": "ok" if datenbank_ok else "error"}}
+    return jsonify(antwort), 200 if datenbank_ok else 503
 
 
 @app.post("/auth/login")

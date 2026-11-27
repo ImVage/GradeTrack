@@ -108,6 +108,12 @@ Monitoring-Tools einlesen und Änderungen an Noten nachvollziehen. Der Health Ch
 auch die Datenbankverbindung, und Docker nutzt ihn, um einen hängenden Container zu
 erkennen.
 
+**Umsetzung und Nachweise:**
+
+| Kriterium | Umsetzung | Nachweis |
+|---|---|---|
+| Health Check der Hauptanwendung | `GET /health` in [`gradetrack.py`](../gradetrack.py) öffnet die Datenbank schreibgeschützt und prüft, ob die Tabellen `users`, `modules` und `grades` vorhanden sind. Gesund: `200`, gestört: `503` ohne interne Details, der Grund steht als `health_failed` im Log. Der `HEALTHCHECK` im [`Dockerfile`](../Dockerfile) ruft den Endpunkt alle 30 s auf, nach 3 Fehlschlägen ist der Container `unhealthy`. | [`tests/test_health.py`](../tests/test_health.py) (fehlende Datenbank, fehlende Tabelle), Workflow *Dynamictest* |
+
 ---
 
 ## 5. Dynamisches Testing (mind. 1) – Vertiefung
