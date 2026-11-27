@@ -2,9 +2,8 @@ import functools
 import getpass
 import hashlib
 import os
-import random
+import secrets
 import sqlite3
-import string
 import sys
 import traceback
 from datetime import datetime
@@ -23,6 +22,7 @@ try:
     )
     from flask_wtf.csrf import CSRFProtect
     from werkzeug.exceptions import HTTPException
+    from werkzeug.security import check_password_hash, generate_password_hash
 except ImportError:
     print(
         "[Fehler] Die benötigte Abhängigkeit 'flask' ist nicht installiert.\n"
@@ -156,12 +156,24 @@ def set_security_headers(response):
 # ---------------------------------------------------------------------------
 
 
-def weak_hash(password):
-    return hashlib.md5(password.encode("utf-8")).hexdigest()
+def hash_passwort(passwort):
+    """Gesalzener, absichtlich langsamer Hash (scrypt), kein eigenes Verfahren."""
+    return generate_password_hash(passwort)
 
 
-def generate_token():
-    return "".join(random.choices(string.ascii_letters + string.digits, k=16))
+# Vergleichswert für unbekannte Benutzer: Der Login dauert dann genauso lange wie bei
+# einem falschen Passwort und verrät nicht über die Laufzeit, ob es den Namen gibt.
+DUMMY_HASH = hash_passwort(secrets.token_urlsafe(16))
+
+
+def neues_token():
+    """Kryptografisch zufälliges API-Token mit erkennbarem Präfix (für Secret Scanner)."""
+    return "gt_" + secrets.token_urlsafe(32)
+
+
+def token_hash(token):
+    """In der Datenbank steht nur der Hash. Ein Datenbank-Leak verrät keine gültigen Tokens."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def get_db():
@@ -186,14 +198,24 @@ def init_db():
     db.commit()
 
 
+@functools.cache
+def demo_hash(passwort):
+    # scrypt ist absichtlich langsam. Die Demo-Hashes werden pro Prozess nur einmal berechnet,
+    # sonst dauert jedes Zurücksetzen der Datenbank (z. B. in den Tests) spürbar länger.
+    return hash_passwort(passwort)
+
+
 def lade_demodaten(db):
     db.executemany(
         "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
         [
-            ("pamt", "Prüfungsamt DHBW", weak_hash("admin123"), "registrar", "registrar-token-111"),
-            ("tobias", "Tobias Gehrke", weak_hash("tobias123"), "student", "tobias-token-222"),
-            ("pavel", "Pavel Kullmann", weak_hash("pavel123"), "student", "pavel-token-333"),
-            ("anastasia", "Anastasia Rotermel", weak_hash("anastasia123"), "student", "anastasia-token-444"),
+            (name, voller_name, demo_hash(passwort), rolle, token_hash(neues_token()))
+            for name, voller_name, passwort, rolle in [
+                ("pamt", "Prüfungsamt DHBW", "admin123", "registrar"),
+                ("tobias", "Tobias Gehrke", "tobias123", "student"),
+                ("pavel", "Pavel Kullmann", "pavel123", "student"),
+                ("anastasia", "Anastasia Rotermel", "anastasia123", "student"),
+            ]
         ],
     )
     db.executemany(
@@ -229,10 +251,8 @@ def lade_demodaten(db):
 
 
 def get_token():
-    token = request.headers.get("X-API-Token")
-    if not token:
-        token = request.args.get("token")
-    return token
+    # Nur im Header. Tokens in der URL landen in Server-Logs, im Browserverlauf und im Referer.
+    return request.headers.get("X-API-Token")
 
 
 def load_user():
@@ -246,7 +266,7 @@ def load_user():
         return None
 
     print(f"[auth] Anfrage mit Token: {token}")
-    row = get_db().execute("SELECT * FROM users WHERE api_token = ?", (token,)).fetchone()
+    row = get_db().execute("SELECT * FROM users WHERE api_token = ?", (token_hash(token),)).fetchone()
     if row is None:
         return None
     return dict(row)
@@ -256,11 +276,10 @@ def authenticate_credentials(username, password):
     print(f"[auth] Login-Versuch: username={username} password={password}")
     db = get_db()
     row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-    if row is None:
-        return None, f"Benutzer '{username}' existiert nicht"
-
-    if row["password_hash"] != weak_hash(password):
-        return None, f"Passwort für '{username}' ist falsch"
+    # Eine Meldung für beide Fälle, sonst ließe sich ausprobieren, welche Namen existieren.
+    gespeichert = row["password_hash"] if row is not None else DUMMY_HASH
+    if not check_password_hash(gespeichert, password) or row is None:
+        return None, "Benutzername oder Passwort falsch"
 
     return dict(row), None
 
@@ -509,15 +528,17 @@ def ui_add_user():
 
     username = request.form["username"]
     full_name = request.form.get("full_name") or username
-    password = request.form.get("password", "start123")
+    password = request.form.get("password", "")
     role = request.form.get("role", "student")
-    token = generate_token()
+    if len(password) < 12:
+        flash("Das Initial-Passwort muss mindestens 12 Zeichen lang sein.", "error")
+        return redirect(url_for("dashboard", tab="users"))
 
     db = get_db()
     try:
         db.execute(
             "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-            (username, full_name, weak_hash(password), role, token),
+            (username, full_name, hash_passwort(password), role, token_hash(neues_token())),
         )
     except sqlite3.IntegrityError:
         flash(f"Benutzername '{username}' ist bereits vergeben.", "error")
@@ -545,6 +566,13 @@ def api_login():
     if error:
         return jsonify({"error": error}), 401
 
+    # Jeder API-Login stellt ein neues Token aus und macht das alte ungültig. Gespeichert
+    # wird nur der Hash, das Token selbst sieht der Client genau einmal.
+    token = neues_token()
+    db = get_db()
+    db.execute("UPDATE users SET api_token = ? WHERE id = ?", (token_hash(token), user["id"]))
+    db.commit()
+
     session["user_id"] = user["id"]
     return jsonify(
         {
@@ -552,7 +580,7 @@ def api_login():
             "username": user["username"],
             "full_name": user["full_name"],
             "role": user["role"],
-            "api_token": user["api_token"],
+            "api_token": token,
         }
     )
 
@@ -741,17 +769,19 @@ def list_users():
 @registrar_required
 def create_user():
     data = request.get_json()
-    token = generate_token()
-    password = data.get("password", "start123")
+    password = data.get("password", "")
+    if len(password) < 12:
+        return jsonify({"error": "Passwort muss mindestens 12 Zeichen lang sein"}), 400
     full_name = data.get("full_name", data["username"])
     db = get_db()
     cur = db.execute(
         "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-        (data["username"], full_name, weak_hash(password), data.get("role", "student"), token),
+        (data["username"], full_name, hash_passwort(password), data.get("role", "student"), token_hash(neues_token())),
     )
     db.commit()
-    print(f"[users] Neuer Benutzer {data['username']} ({full_name}, Passwort: {password}, Token: {token})")
-    return jsonify({"id": cur.lastrowid, "username": data["username"], "full_name": full_name, "api_token": token}), 201
+    print(f"[users] Neuer Benutzer {data['username']} ({full_name})")
+    # Kein Token in der Antwort: Die Person holt sich ihr eigenes beim ersten Login.
+    return jsonify({"id": cur.lastrowid, "username": data["username"], "full_name": full_name}), 201
 
 
 @app.errorhandler(Exception)
@@ -772,7 +802,7 @@ def lege_pruefungsamt_an(username):
     try:
         db.execute(
             "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-            (username, "Prüfungsamt", weak_hash(passwort), "registrar", generate_token()),
+            (username, "Prüfungsamt", hash_passwort(passwort), "registrar", token_hash(neues_token())),
         )
     except sqlite3.IntegrityError:
         raise SystemExit(f"[Fehler] Benutzer {username!r} existiert bereits.") from None
