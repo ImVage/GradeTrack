@@ -486,10 +486,14 @@ def ui_add_user():
     token = generate_token()
 
     db = get_db()
-    db.execute(
-        "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-        (username, full_name, weak_hash(password), role, token),
-    )
+    try:
+        db.execute(
+            "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
+            (username, full_name, weak_hash(password), role, token),
+        )
+    except sqlite3.IntegrityError:
+        flash(f"Benutzername '{username}' ist bereits vergeben.", "error")
+        return redirect(url_for("dashboard", tab="users"))
     db.commit()
     flash(f"Benutzer '{full_name}' ({username}) angelegt.", "success")
     return redirect(url_for("dashboard", tab="users"))
