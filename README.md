@@ -210,7 +210,7 @@ python -m pip install pip-tools
 pip-compile --generate-hashes requirements.in
 ```
 
-Werkzeuge für die CI (`pip-audit`, `cyclonedx-bom`) stehen getrennt davon in `requirements-dev.in` und
+Werkzeuge für Entwicklung und CI (`pip-audit`, `cyclonedx-bom`, `pytest`, `bandit`, `mypy`, `pre-commit`) stehen getrennt davon in `requirements-dev.in` und
 sind genauso mit Hashes in `requirements-dev.txt` festgeschrieben. Erzeugt wird die Datei ohne
 Kommentare:
 
@@ -225,8 +225,8 @@ sed -i '/^#/d' requirements-dev.txt
 Der Workflow [`supply-chain.yml`](.github/workflows/supply-chain.yml) läuft bei jedem Push und
 Pull Request auf `main`, wöchentlich sowie manuell (*Actions → Supply Chain → Run workflow*):
 
-- **Pinning:** `scripts/check-pinning.sh` schlägt fehl, wenn eine GitHub Action nicht per
-  Commit-SHA oder ein Docker-Image nicht per Digest referenziert ist. Der zugehörige
+- **Pinning:** `scripts/check-pinning.sh` schlägt fehl, wenn eine GitHub Action oder ein
+  pre-commit-Hook nicht per Commit-SHA oder ein Docker-Image nicht per Digest referenziert ist. Der zugehörige
   Release-Tag jeder Action steht im Namen des jeweiligen Workflow-Schritts.
 - **Bekannte Sicherheitslücken:** `pip-audit` prüft alle Pakete aus `requirements.txt` gegen
   die Python Packaging Advisory Database und schlägt bei einem Fund fehl.
@@ -241,6 +241,45 @@ python -m pip install --require-hashes -r requirements-dev.txt
 pip-audit -r requirements.txt --require-hashes --disable-pip
 bash scripts/check-pinning.sh
 cyclonedx-py requirements requirements.txt --pyproject pyproject.toml --of JSON -o sbom.cdx.json
+```
+
+
+### Code Security prüfen
+
+Der Workflow [`code-security.yml`](.github/workflows/code-security.yml) läuft bei jedem Push und
+Pull Request auf `main` sowie manuell. Über *Actions → Code Security → Run workflow* lässt sich
+im Feld `ref` auch ein anderer Stand prüfen, z. B. `vulnerable`.
+
+- **SAST:** [Bandit](https://bandit.readthedocs.io/) prüft den Python-Code auf typische
+  Schwachstellen (SQL per String, schwache Hashes, hartkodierte Secrets, …).
+- **Secret Scanning:** [gitleaks](https://github.com/gitleaks/gitleaks) durchsucht die
+  **ganze Git-History**. Neben den Standardregeln erkennt [`.gitleaks.toml`](.gitleaks.toml)
+  GradeTrack-Tokens (`gt_…`) und fest eingetragene `SECRET_KEY`-Werte.
+- **Type Checker:** `mypy` im Modus `strict` (Konfiguration in `pyproject.toml`).
+- **Fail Fast:** [`tests/test_fail_fast.py`](tests/test_fail_fast.py) prüft, dass ungültige
+  Eingaben sofort mit 400 abgelehnt werden. Die Tests laufen mit allen anderen im Workflow
+  *Dynamictest*.
+
+Jeder Fund lässt den Lauf fehlschlagen. Die Ergebnisse stehen in der Zusammenfassung des Laufs
+und als Artefakte (`bandit-report`, `gitleaks-report`, `mypy-report`). Nachweise, dass die
+Werkzeuge echte Probleme finden, liegen in [`docs/evidence/`](docs/evidence/)
+(`code-security_*_positivtest.txt`).
+
+Dieselben Prüfungen laufen vor jedem Commit über [pre-commit](https://pre-commit.com/):
+
+```bash
+source .venv/Scripts/activate        # unter Linux/macOS: source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+pre-commit install                   # einmalig: Hook in .git/hooks eintragen
+pre-commit run --all-files           # alle Prüfungen von Hand ausführen
+```
+
+Lokal einzeln ausführen:
+
+```bash
+bandit -c pyproject.toml -r .
+mypy
+python -m pytest tests/test_fail_fast.py
 ```
 
 ---
