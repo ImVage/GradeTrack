@@ -371,6 +371,57 @@ def ungueltige_eingabe(fehler):
 
 
 # ---------------------------------------------------------------------------
+# Rechte pro Objekt und sichere Abfragen
+# ---------------------------------------------------------------------------
+
+# Feste Zuordnung Sortierwunsch -> SQL. Spaltennamen kommen nie aus der Anfrage.
+SORTIERUNG_SQL = {
+    "id": "id",
+    "semester": "semester, id",
+    "grade": "grade, id",
+    "module_code": "module_code, id",
+    "exam_date": "exam_date, id",
+    "status": "status, id",
+}
+
+
+def ist_pruefungsamt(user):
+    return user["role"] == "registrar"
+
+
+def sichtbare_note(note_id, user):
+    """Liefert die Note, wenn die Person sie sehen darf, sonst None.
+
+    Studierende sehen nur eigene Noten. Fremde Noten werden wie nicht vorhandene behandelt
+    (404 statt 403), damit sich nicht ausprobieren lässt, welche IDs es gibt.
+    """
+    zeile = get_db().execute("SELECT * FROM grades WHERE id = ?", (note_id,)).fetchone()
+    if zeile is None:
+        return None
+    if not ist_pruefungsamt(user) and zeile["student_id"] != user["id"]:
+        return None
+    return dict(zeile)
+
+
+def ziel_student(student_id, user):
+    """Studierende tragen nur für sich selbst ein, das Prüfungsamt für eine/n Studierende/n."""
+    if ist_pruefungsamt(user):
+        if student_id is None:
+            raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "student_id", "meldung": "Pflichtfeld für das Prüfungsamt"}])
+        pruefe_ist_student(student_id)
+        return student_id
+    if student_id is not None and student_id != user["id"]:
+        raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "student_id", "meldung": "Nur für sich selbst"}])
+    return user["id"]
+
+
+def like_muster(text):
+    """Suchtext für LIKE: % und _ gelten als normale Zeichen, nicht als Platzhalter."""
+    maskiert = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{maskiert}%"
+
+
+# ---------------------------------------------------------------------------
 # Web-Oberfläche (Browser UI)
 # ---------------------------------------------------------------------------
 
@@ -423,10 +474,11 @@ def dashboard():
     status = filter_.status
     search = filter_.search or ""
 
-    if filter_.student_id is None and user["role"] == "student":
-        selected_student_id = user["id"]
-    else:
+    if ist_pruefungsamt(user):
         selected_student_id = filter_.student_id
+    else:
+        # Studierende sehen immer nur ihre eigenen Noten, egal was in der URL steht.
+        selected_student_id = user["id"]
 
     query = (
         "SELECT g.*, u.username AS student_name, u.full_name AS student_full_name, m.title AS module_title "
@@ -465,11 +517,15 @@ def dashboard():
     mod_query = "SELECT * FROM modules"
     mod_params = []
     if search:
-        mod_query += " WHERE title LIKE ? OR code LIKE ?"
-        mod_params = [f"%{search}%", f"%{search}%"]
+        mod_query += " WHERE title LIKE ? ESCAPE '\\' OR code LIKE ? ESCAPE '\\'"
+        mod_params = [like_muster(search), like_muster(search)]
     modules = [dict(r) for r in db.execute(mod_query, mod_params).fetchall()]
 
-    students = [dict(r) for r in db.execute("SELECT id, username, full_name, role, api_token FROM users").fetchall()]
+    students = (
+        [dict(r) for r in db.execute("SELECT id, username, full_name, role FROM users").fetchall()]
+        if ist_pruefungsamt(user)
+        else []
+    )
 
     full_name = user.get("full_name") or user.get("username", "U")
     parts = full_name.split()
@@ -516,9 +572,7 @@ def ui_add_grade():
     try:
         note = parameter_eingabe(schemas.NoteNeu, request.form)
         pruefe_modul_existiert(note.module_code)
-        student_id = note.student_id or user["id"]
-        if note.student_id is not None:
-            pruefe_ist_student(note.student_id)
+        student_id = ziel_student(note.student_id, user)
     except UngueltigeEingabe as fehler:
         flash_fehler(fehler)
         return redirect(url_for("dashboard", tab="add"))
@@ -568,9 +622,12 @@ def ui_delete_grade(grade_id):
         return redirect(url_for("dashboard"))
 
     db = get_db()
-    db.execute("DELETE FROM grades WHERE id = ?", (grade_id,))
+    cur = db.execute("DELETE FROM grades WHERE id = ?", (grade_id,))
     db.commit()
-    flash(f"Note #{grade_id} wurde gelöscht.", "info")
+    if cur.rowcount == 0:
+        flash(f"Note #{grade_id} gibt es nicht.", "error")
+    else:
+        flash(f"Note #{grade_id} wurde gelöscht.", "info")
     return redirect(url_for("dashboard"))
 
 
@@ -579,6 +636,9 @@ def ui_add_module():
     user = load_user()
     if not user:
         return redirect(url_for("login_page"))
+    if not ist_pruefungsamt(user):
+        flash("Nur das Prüfungsamt darf Module anlegen!", "error")
+        return redirect(url_for("dashboard", tab="modules"))
 
     try:
         modul = parameter_eingabe(schemas.ModulNeu, request.form)
@@ -677,29 +737,37 @@ def api_logout():
 @login_required
 def list_grades():
     filter_ = parameter_eingabe(schemas.NotenFilter, request.args)
-    semester, student_id, status, sort = filter_.semester, filter_.student_id, filter_.status, filter_.sort
+    student_id = filter_.student_id
+    if not ist_pruefungsamt(g.user):
+        if student_id is not None and student_id != g.user["id"]:
+            return jsonify({"error": "Nur eigene Noten"}), 403
+        student_id = g.user["id"]
 
+    # Alle Werte als Parameter (?). Die Abfrage selbst besteht nur aus festen Bausteinen.
     query = "SELECT * FROM grades WHERE 1=1"
-    if semester:
-        query += f" AND semester = {semester}"
-    if student_id:
-        query += f" AND student_id = {student_id}"
-    if status:
-        query += f" AND status = '{status}'"
-    query += f" ORDER BY {sort}"
+    params = []
+    if filter_.semester is not None:
+        query += " AND semester = ?"
+        params.append(filter_.semester)
+    if student_id is not None:
+        query += " AND student_id = ?"
+        params.append(student_id)
+    if filter_.status is not None:
+        query += " AND status = ?"
+        params.append(filter_.status)
+    query += " ORDER BY " + SORTIERUNG_SQL[filter_.sort]
 
-    print(f"[grades] SQL: {query}")
-    rows = get_db().execute(query).fetchall()
+    rows = get_db().execute(query, params).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.get("/grades/<int:grade_id>")
 @login_required
 def get_grade(grade_id):
-    row = get_db().execute("SELECT * FROM grades WHERE id = ?", (grade_id,)).fetchone()
-    if row is None:
+    note = sichtbare_note(grade_id, g.user)
+    if note is None:
         return jsonify({"error": "Note nicht gefunden"}), 404
-    return jsonify(dict(row))
+    return jsonify(note)
 
 
 @app.post("/grades")
@@ -708,15 +776,14 @@ def get_grade(grade_id):
 def create_grade():
     note = json_eingabe(schemas.NoteNeu)
     pruefe_modul_existiert(note.module_code)
-    if note.student_id is not None:
-        pruefe_ist_student(note.student_id)
+    student_id = ziel_student(note.student_id, g.user)
 
     db = get_db()
     cur = db.execute(
         "INSERT INTO grades (student_id, module_code, grade, ects, semester, exam_date, attempt, comment, status) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
         (
-            note.student_id or g.user["id"],
+            student_id,
             note.module_code,
             note.grade,
             note.ects,
@@ -737,17 +804,33 @@ def create_grade():
 @csrf.exempt
 @login_required
 def update_grade(grade_id):
+    note = sichtbare_note(grade_id, g.user)
+    if note is None:
+        return jsonify({"error": "Note nicht gefunden"}), 404
+    if note["status"] == "approved" and not ist_pruefungsamt(g.user):
+        return jsonify({"error": "Bestätigte Noten kann nur das Prüfungsamt ändern"}), 403
+
     aenderung = json_eingabe(schemas.NoteAenderung)
     if aenderung.module_code is not None:
         pruefe_modul_existiert(aenderung.module_code)
-    db = get_db()
 
-    fields = sorted(aenderung.model_fields_set)
-    daten = aenderung.model_dump()
-    daten["exam_date"] = als_text(aenderung.exam_date)
-    set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values = [daten[k] for k in fields] + [grade_id]
-    db.execute(f"UPDATE grades SET {set_clause} WHERE id = ?", values)
+    # Feste Anweisung: Nicht gesetzte Felder (NULL) behalten ihren Wert.
+    db = get_db()
+    db.execute(
+        "UPDATE grades SET module_code = COALESCE(?, module_code), grade = COALESCE(?, grade), "
+        "ects = COALESCE(?, ects), semester = COALESCE(?, semester), exam_date = COALESCE(?, exam_date), "
+        "attempt = COALESCE(?, attempt), comment = COALESCE(?, comment) WHERE id = ?",
+        (
+            aenderung.module_code,
+            aenderung.grade,
+            aenderung.ects,
+            aenderung.semester,
+            als_text(aenderung.exam_date),
+            aenderung.attempt,
+            aenderung.comment,
+            grade_id,
+        ),
+    )
     db.commit()
 
     row = db.execute("SELECT * FROM grades WHERE id = ?", (grade_id,)).fetchone()
@@ -775,8 +858,10 @@ def approve_grade(grade_id):
 @registrar_required
 def delete_grade(grade_id):
     db = get_db()
-    db.execute("DELETE FROM grades WHERE id = ?", (grade_id,))
+    cur = db.execute("DELETE FROM grades WHERE id = ?", (grade_id,))
     db.commit()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Note nicht gefunden"}), 404
     return jsonify({"message": f"Note {grade_id} gelöscht"})
 
 
@@ -784,15 +869,17 @@ def delete_grade(grade_id):
 def list_modules():
     search = parameter_eingabe(schemas.ModulSuche, request.args).search
     query = "SELECT * FROM modules"
+    params = []
     if search:
-        query += f" WHERE title LIKE '%{search}%' OR code LIKE '%{search}%'"
-    rows = get_db().execute(query).fetchall()
+        query += " WHERE title LIKE ? ESCAPE '\\' OR code LIKE ? ESCAPE '\\'"
+        params = [like_muster(search), like_muster(search)]
+    rows = get_db().execute(query, params).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.post("/modules")
 @csrf.exempt
-@login_required
+@registrar_required
 def create_module():
     modul = json_eingabe(schemas.ModulNeu)
     db = get_db()
@@ -812,6 +899,8 @@ def create_module():
 def ects_stats():
     filter_ = parameter_eingabe(schemas.StatistikFilter, request.args)
     student_id = filter_.student_id or g.user["id"]
+    if not ist_pruefungsamt(g.user) and student_id != g.user["id"]:
+        return jsonify({"error": "Nur eigene Statistik"}), 403
     semester = filter_.semester
 
     query = "SELECT grade, ects FROM grades WHERE student_id = ?"
@@ -840,9 +929,9 @@ def ects_stats():
 
 
 @app.get("/users")
-@login_required
+@registrar_required
 def list_users():
-    rows = get_db().execute("SELECT * FROM users").fetchall()
+    rows = get_db().execute("SELECT id, username, full_name, role FROM users").fetchall()
     return jsonify([dict(r) for r in rows])
 
 
