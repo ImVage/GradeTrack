@@ -129,6 +129,8 @@ Rolle, **rot** nur das Prüfungsamt.
 python -m venv .venv
 source .venv/Scripts/activate
 python -m pip install --require-hashes -r requirements.txt
+export GRADETRACK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export GRADETRACK_DEMO_DATA=1 GRADETRACK_SECURE_COOKIES=0
 python gradetrack.py
 ```
 
@@ -137,12 +139,25 @@ python gradetrack.py
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --require-hashes -r requirements.txt
+export GRADETRACK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export GRADETRACK_DEMO_DATA=1 GRADETRACK_SECURE_COOKIES=0
 python gradetrack.py
 ```
 
 Die App läuft dann auf **http://localhost:5000**. Beim ersten Start wird die Datenbank
-`grades.db` automatisch mit Beispieldaten angelegt. Mit `python gradetrack.py --init-db`
-setzt ihr sie auf die Beispieldaten zurück.
+`grades.db` automatisch angelegt. Mit `python gradetrack.py --init-db` setzt ihr sie zurück.
+
+**Einstellungen** (siehe [`.env.example`](.env.example)):
+
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `GRADETRACK_SECRET_KEY` | Schlüssel für Session-Cookies, mind. 32 Zeichen. **Ohne ihn startet die App nicht.** | – |
+| `GRADETRACK_DEMO_DATA` | `1` legt Beispielbenutzer und -noten mit bekannten Passwörtern an (nur Demo und Tests) | `0` |
+| `GRADETRACK_SECURE_COOKIES` | `1` sendet das Session-Cookie nur über HTTPS. Für lokale Tests über `http://` auf `0` | `1` |
+| `GRADETRACK_HOST`, `GRADETRACK_PORT`, `GRADETRACK_DEBUG` | Nur für den Entwicklungsserver | `127.0.0.1`, `5000`, `0` |
+
+Ohne Beispieldaten legt ihr einen Zugang für das Prüfungsamt so an (das Passwort wird
+verdeckt abgefragt): `python gradetrack.py --create-registrar <name>`
 
 ### API ausprobieren
 
@@ -183,8 +198,11 @@ docker run --rm -p 127.0.0.1:8000:8000 \
 ```
 
 Die App läuft dann auf **http://localhost:8000**. Die Datenbank liegt im Volume
-`gradetrack-data` und bleibt bei einem Neustart erhalten. Zurücksetzen auf die Beispieldaten:
-`docker volume rm gradetrack-data`.
+`gradetrack-data` und bleibt bei einem Neustart erhalten. Zurücksetzen:
+`docker volume rm gradetrack-data`. Für die Demo mit Beispielbenutzern in `.env`
+`GRADETRACK_DEMO_DATA=1` setzen. Weil die App im Container nur per HTTP erreichbar ist,
+für lokale Tests im Browser außerdem `GRADETRACK_SECURE_COOKIES=0` (im Betrieb terminiert
+ein Reverse-Proxy HTTPS).
 
 **Was das Image absichert:**
 

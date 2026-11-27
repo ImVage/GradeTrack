@@ -23,7 +23,7 @@ RUN groupadd --system --gid 10001 gradetrack \
  && mkdir /data \
  && chown gradetrack:gradetrack /data
 
-COPY gradetrack.py .
+COPY gradetrack.py schemas.py ./
 COPY templates/ templates/
 COPY static/ static/
 
@@ -36,4 +36,9 @@ EXPOSE 8000
 # die SQLite-Datenbank anlegt; mehrere Threads reichen für die Last.
 # --no-control-socket: Die Fernsteuer-Schnittstelle von gunicorn brauchen wir nicht
 # (weniger Angriffsfläche, und der Benutzer hat bewusst kein Home-Verzeichnis).
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--no-control-socket", "--access-logfile", "-", "gradetrack:app"]
+# --preload: Die App wird einmal im Hauptprozess geladen. Fehlt z. B. GRADETRACK_SECRET_KEY,
+# beendet sich der Container sofort, statt den Worker endlos neu zu starten.
+# Kein gunicorn-Zugriffsprotokoll: Es schreibt die ganze URL samt Query-String (dort könnten
+# Suchtexte oder fälschlich mitgeschickte Tokens stehen). Die App protokolliert jede Anfrage
+# selbst als JSON-Zeile, ohne Query-String.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--no-control-socket", "--preload", "gradetrack:app"]

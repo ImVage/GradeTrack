@@ -5,6 +5,10 @@ import pytest
 def gradetrack_modul(tmp_path_factory):
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("GRADETRACK_DB", str(tmp_path_factory.mktemp("import") / "grades.db"))
+        # Nur für Tests: fester Schlüssel, Beispielbenutzer, Cookies auch ohne HTTPS.
+        mp.setenv("GRADETRACK_SECRET_KEY", "nur-fuer-tests-" + "x" * 32)
+        mp.setenv("GRADETRACK_DEMO_DATA", "1")
+        mp.setenv("GRADETRACK_SECURE_COOKIES", "0")
         import gradetrack
 
         yield gradetrack
