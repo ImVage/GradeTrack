@@ -23,7 +23,7 @@ RUN groupadd --system --gid 10001 gradetrack \
  && mkdir /data \
  && chown gradetrack:gradetrack /data
 
-COPY gradetrack.py .
+COPY gradetrack.py schemas.py ./
 COPY templates/ templates/
 COPY static/ static/
 

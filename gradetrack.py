@@ -21,7 +21,8 @@ try:
         url_for,
     )
     from flask_wtf.csrf import CSRFProtect
-    from werkzeug.exceptions import HTTPException
+    from pydantic import ValidationError
+    from werkzeug.exceptions import HTTPException, UnsupportedMediaType
     from werkzeug.security import check_password_hash, generate_password_hash
 except ImportError:
     print(
@@ -30,6 +31,8 @@ except ImportError:
         "    pip install flask\n"
     )
     sys.exit(1)
+
+import schemas
 
 # ---------------------------------------------------------------------------
 # Konfiguration
@@ -70,18 +73,6 @@ if len(SECRET_KEY) < 32:
         "[Fehler] GRADETRACK_SECRET_KEY fehlt oder ist kürzer als 32 Zeichen.\n"
         "Erzeugen z. B. mit: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
     )
-
-EDITABLE_FIELDS = [
-    "module_code",
-    "grade",
-    "ects",
-    "semester",
-    "exam_date",
-    "attempt",
-    "comment",
-    "status",
-    "student_id",
-]
 
 SCHEMA_SQL = """
 DROP TABLE IF EXISTS grades;
@@ -308,6 +299,78 @@ def registrar_required(view):
 
 
 # ---------------------------------------------------------------------------
+# Eingabeprüfung (Fail Fast)
+# ---------------------------------------------------------------------------
+
+
+class UngueltigeEingabe(Exception):
+    """Eingabe verletzt das Schema oder eine Fachregel. Wird zentral mit 400 beantwortet."""
+
+    def __init__(self, meldung, details=None):
+        super().__init__(meldung)
+        self.meldung = meldung
+        self.details = details or []
+
+
+def fehlerliste(fehler):
+    # Nur Feld und Regel, nie den Eingabewert selbst: Die Antwort spiegelt nichts zurück.
+    return [
+        {"feld": ".".join(str(teil) for teil in e["loc"]) or "eingabe", "meldung": e["msg"]}
+        for e in fehler.errors(include_url=False, include_input=False, include_context=False)
+    ]
+
+
+def pruefe(modell, daten, strict=True):
+    try:
+        return modell.model_validate(daten, strict=strict)
+    except ValidationError as fehler:
+        raise UngueltigeEingabe("Ungültige Eingabe", fehlerliste(fehler)) from None
+
+
+def json_eingabe(modell):
+    """JSON-Body gegen ein Schema prüfen. Typen müssen exakt passen ("5" ist keine Zahl)."""
+    if not request.is_json:
+        raise UnsupportedMediaType("Content-Type muss application/json sein")
+    try:
+        return modell.model_validate_json(request.get_data())
+    except ValidationError as fehler:
+        raise UngueltigeEingabe("Ungültige Eingabe", fehlerliste(fehler)) from None
+
+
+def parameter_eingabe(modell, quelle, auslassen=("csrf_token",)):
+    """URL-Parameter und Formularfelder prüfen. Sie sind immer Text, leere Felder gelten als nicht gesetzt."""
+    daten = {k: v for k, v in quelle.items() if v != "" and k not in auslassen}
+    return pruefe(modell, daten, strict=False)
+
+
+def pruefe_modul_existiert(code):
+    if get_db().execute("SELECT 1 FROM modules WHERE code = ?", (code,)).fetchone() is None:
+        raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "module_code", "meldung": "Modul existiert nicht"}])
+
+
+def pruefe_ist_student(student_id):
+    zeile = get_db().execute("SELECT role FROM users WHERE id = ?", (student_id,)).fetchone()
+    if zeile is None or zeile["role"] != "student":
+        raise UngueltigeEingabe(
+            "Ungültige Eingabe", [{"feld": "student_id", "meldung": "Keine Studierende/r mit dieser ID"}]
+        )
+
+
+def als_text(datum):
+    return datum.isoformat() if datum is not None else None
+
+
+def flash_fehler(fehler):
+    details = "; ".join(f"{d['feld']}: {d['meldung']}" for d in fehler.details)
+    flash(f"{fehler.meldung}: {details}" if details else fehler.meldung, "error")
+
+
+@app.errorhandler(UngueltigeEingabe)
+def ungueltige_eingabe(fehler):
+    return jsonify({"error": fehler.meldung, "details": fehler.details}), 400
+
+
+# ---------------------------------------------------------------------------
 # Web-Oberfläche (Browser UI)
 # ---------------------------------------------------------------------------
 
@@ -321,10 +384,13 @@ def login_page():
 
 @app.post("/login")
 def login_submit():
-    username = request.form.get("username", "")
-    password = request.form.get("password", "")
+    try:
+        eingabe = parameter_eingabe(schemas.LoginEingabe, request.form)
+    except UngueltigeEingabe:
+        flash("Benutzername oder Passwort falsch", "error")
+        return redirect(url_for("login_page"))
 
-    user, error = authenticate_credentials(username, password)
+    user, error = authenticate_credentials(eingabe.username, eingabe.password)
     if error:
         flash(error, "error")
         return redirect(url_for("login_page"))
@@ -348,15 +414,19 @@ def dashboard():
         return redirect(url_for("login_page"))
 
     db = get_db()
-    semester = request.args.get("semester", "")
-    status = request.args.get("status", "")
-    student_id = request.args.get("student_id", "")
-    search = request.args.get("search", "")
+    try:
+        filter_ = parameter_eingabe(schemas.DashboardFilter, request.args)
+    except UngueltigeEingabe:
+        flash("Ungültiger Filter, es werden alle Einträge angezeigt.", "error")
+        filter_ = schemas.DashboardFilter()
+    semester = filter_.semester
+    status = filter_.status
+    search = filter_.search or ""
 
-    if not student_id and user["role"] == "student":
-        selected_student_id = str(user["id"])
+    if filter_.student_id is None and user["role"] == "student":
+        selected_student_id = user["id"]
     else:
-        selected_student_id = student_id
+        selected_student_id = filter_.student_id
 
     query = (
         "SELECT g.*, u.username AS student_name, u.full_name AS student_full_name, m.title AS module_title "
@@ -405,7 +475,7 @@ def dashboard():
     parts = full_name.split()
     initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else parts[0][1:2])).upper()
 
-    tab = request.args.get("tab", "overview")
+    tab = filter_.tab
     if search and "tab" not in request.args:
         tab = "modules"
 
@@ -429,9 +499,9 @@ def dashboard():
             "sem_ects": sem_ects,
         },
         filters={
-            "semester": semester,
-            "status": status,
-            "student_id": selected_student_id,
+            "semester": str(semester) if semester else "",
+            "status": status or "",
+            "student_id": str(selected_student_id) if selected_student_id else "",
             "search": search,
         },
     )
@@ -443,27 +513,33 @@ def ui_add_grade():
     if not user:
         return redirect(url_for("login_page"))
 
-    grade = float(request.form["grade"])
-    if grade < 1.0 or grade > 5.0:
-        flash("Note muss zwischen 1.0 und 5.0 liegen!", "error")
+    try:
+        note = parameter_eingabe(schemas.NoteNeu, request.form)
+        pruefe_modul_existiert(note.module_code)
+        student_id = note.student_id or user["id"]
+        if note.student_id is not None:
+            pruefe_ist_student(note.student_id)
+    except UngueltigeEingabe as fehler:
+        flash_fehler(fehler)
         return redirect(url_for("dashboard", tab="add"))
-
-    module_code = request.form["module_code"]
-    ects = int(request.form["ects"])
-    semester = int(request.form["semester"])
-    exam_date = request.form.get("exam_date", "")
-    attempt = int(request.form.get("attempt", 1))
-    comment = request.form.get("comment", "")
-    student_id = request.form.get("student_id") or user["id"]
 
     db = get_db()
     db.execute(
         "INSERT INTO grades (student_id, module_code, grade, ects, semester, exam_date, attempt, comment, status) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-        (student_id, module_code, grade, ects, semester, exam_date, attempt, comment),
+        (
+            student_id,
+            note.module_code,
+            note.grade,
+            note.ects,
+            note.semester,
+            als_text(note.exam_date),
+            note.attempt,
+            note.comment,
+        ),
     )
     db.commit()
-    flash(f"Prüfung {module_code} (Note {grade}) wurde eingetragen.", "success")
+    flash(f"Prüfung {note.module_code} (Note {note.grade}) wurde eingetragen.", "success")
     return redirect(url_for("dashboard", tab="overview"))
 
 
@@ -504,18 +580,23 @@ def ui_add_module():
     if not user:
         return redirect(url_for("login_page"))
 
+    try:
+        modul = parameter_eingabe(schemas.ModulNeu, request.form)
+    except UngueltigeEingabe as fehler:
+        flash_fehler(fehler)
+        return redirect(url_for("dashboard", tab="modules"))
+
     db = get_db()
-    db.execute(
-        "INSERT INTO modules (code, title, ects, semester) VALUES (?, ?, ?, ?)",
-        (
-            request.form["code"],
-            request.form["title"],
-            int(request.form["ects"]),
-            int(request.form["semester"]),
-        ),
-    )
+    try:
+        db.execute(
+            "INSERT INTO modules (code, title, ects, semester) VALUES (?, ?, ?, ?)",
+            (modul.code, modul.title, modul.ects, modul.semester),
+        )
+    except sqlite3.IntegrityError:
+        flash(f"Modul {modul.code} gibt es bereits.", "error")
+        return redirect(url_for("dashboard", tab="modules"))
     db.commit()
-    flash(f"Modul {request.form['code']} angelegt.", "success")
+    flash(f"Modul {modul.code} angelegt.", "success")
     return redirect(url_for("dashboard", tab="modules"))
 
 
@@ -526,13 +607,13 @@ def ui_add_user():
         flash("Nur das Prüfungsamt darf Benutzer anlegen!", "error")
         return redirect(url_for("dashboard"))
 
-    username = request.form["username"]
-    full_name = request.form.get("full_name") or username
-    password = request.form.get("password", "")
-    role = request.form.get("role", "student")
-    if len(password) < 12:
-        flash("Das Initial-Passwort muss mindestens 12 Zeichen lang sein.", "error")
+    try:
+        neu = parameter_eingabe(schemas.BenutzerNeu, request.form)
+    except UngueltigeEingabe as fehler:
+        flash_fehler(fehler)
         return redirect(url_for("dashboard", tab="users"))
+    username, password, role = neu.username, neu.password, neu.role
+    full_name = neu.full_name or username
 
     db = get_db()
     try:
@@ -561,8 +642,8 @@ def health():
 @app.post("/auth/login")
 @csrf.exempt
 def api_login():
-    data = request.get_json() or {}
-    user, error = authenticate_credentials(data.get("username", ""), data.get("password", ""))
+    eingabe = json_eingabe(schemas.LoginEingabe)
+    user, error = authenticate_credentials(eingabe.username, eingabe.password)
     if error:
         return jsonify({"error": error}), 401
 
@@ -595,10 +676,8 @@ def api_logout():
 @app.get("/grades")
 @login_required
 def list_grades():
-    semester = request.args.get("semester")
-    student_id = request.args.get("student_id")
-    status = request.args.get("status")
-    sort = request.args.get("sort", "id")
+    filter_ = parameter_eingabe(schemas.NotenFilter, request.args)
+    semester, student_id, status, sort = filter_.semester, filter_.student_id, filter_.status, filter_.sort
 
     query = "SELECT * FROM grades WHERE 1=1"
     if semester:
@@ -627,30 +706,28 @@ def get_grade(grade_id):
 @csrf.exempt
 @login_required
 def create_grade():
-    data = request.get_json()
-
-    grade = float(data["grade"])
-    if grade < 1.0 or grade > 5.0:
-        return jsonify({"error": "Note muss zwischen 1.0 und 5.0 liegen"}), 400
+    note = json_eingabe(schemas.NoteNeu)
+    pruefe_modul_existiert(note.module_code)
+    if note.student_id is not None:
+        pruefe_ist_student(note.student_id)
 
     db = get_db()
     cur = db.execute(
         "INSERT INTO grades (student_id, module_code, grade, ects, semester, exam_date, attempt, comment, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
         (
-            data.get("student_id", g.user["id"]),
-            data["module_code"],
-            grade,
-            data["ects"],
-            data["semester"],
-            data.get("exam_date"),
-            data.get("attempt", 1),
-            data.get("comment", ""),
-            data.get("status", "pending"),
+            note.student_id or g.user["id"],
+            note.module_code,
+            note.grade,
+            note.ects,
+            note.semester,
+            als_text(note.exam_date),
+            note.attempt,
+            note.comment,
         ),
     )
     db.commit()
-    print(f"[grades] {g.user['username']} hat Note {grade} für {data['module_code']} eingetragen")
+    print(f"[grades] {g.user['username']} hat Note {note.grade} für {note.module_code} eingetragen")
 
     row = db.execute("SELECT * FROM grades WHERE id = ?", (cur.lastrowid,)).fetchone()
     return jsonify(dict(row)), 201
@@ -660,15 +737,16 @@ def create_grade():
 @csrf.exempt
 @login_required
 def update_grade(grade_id):
-    data = request.get_json()
+    aenderung = json_eingabe(schemas.NoteAenderung)
+    if aenderung.module_code is not None:
+        pruefe_modul_existiert(aenderung.module_code)
     db = get_db()
 
-    fields = [k for k in data if k in EDITABLE_FIELDS]
-    if not fields:
-        return jsonify({"error": "Keine Felder zum Aktualisieren"}), 400
-
+    fields = sorted(aenderung.model_fields_set)
+    daten = aenderung.model_dump()
+    daten["exam_date"] = als_text(aenderung.exam_date)
     set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values = [data[k] for k in fields] + [grade_id]
+    values = [daten[k] for k in fields] + [grade_id]
     db.execute(f"UPDATE grades SET {set_clause} WHERE id = ?", values)
     db.commit()
 
@@ -704,7 +782,7 @@ def delete_grade(grade_id):
 
 @app.get("/modules")
 def list_modules():
-    search = request.args.get("search")
+    search = parameter_eingabe(schemas.ModulSuche, request.args).search
     query = "SELECT * FROM modules"
     if search:
         query += f" WHERE title LIKE '%{search}%' OR code LIKE '%{search}%'"
@@ -716,21 +794,25 @@ def list_modules():
 @csrf.exempt
 @login_required
 def create_module():
-    data = request.get_json()
+    modul = json_eingabe(schemas.ModulNeu)
     db = get_db()
-    db.execute(
-        "INSERT INTO modules (code, title, ects, semester) VALUES (?, ?, ?, ?)",
-        (data["code"], data["title"], data["ects"], data["semester"]),
-    )
+    try:
+        db.execute(
+            "INSERT INTO modules (code, title, ects, semester) VALUES (?, ?, ?, ?)",
+            (modul.code, modul.title, modul.ects, modul.semester),
+        )
+    except sqlite3.IntegrityError:
+        raise UngueltigeEingabe("Ungültige Eingabe", [{"feld": "code", "meldung": "Modul gibt es bereits"}]) from None
     db.commit()
-    return jsonify(data), 201
+    return jsonify(modul.model_dump()), 201
 
 
 @app.get("/stats/ects")
 @login_required
 def ects_stats():
-    student_id = request.args.get("student_id", g.user["id"])
-    semester = request.args.get("semester")
+    filter_ = parameter_eingabe(schemas.StatistikFilter, request.args)
+    student_id = filter_.student_id or g.user["id"]
+    semester = filter_.semester
 
     query = "SELECT grade, ects FROM grades WHERE student_id = ?"
     params = [student_id]
@@ -768,20 +850,22 @@ def list_users():
 @csrf.exempt
 @registrar_required
 def create_user():
-    data = request.get_json()
-    password = data.get("password", "")
-    if len(password) < 12:
-        return jsonify({"error": "Passwort muss mindestens 12 Zeichen lang sein"}), 400
-    full_name = data.get("full_name", data["username"])
+    neu = json_eingabe(schemas.BenutzerNeu)
+    full_name = neu.full_name or neu.username
     db = get_db()
-    cur = db.execute(
-        "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
-        (data["username"], full_name, hash_passwort(password), data.get("role", "student"), token_hash(neues_token())),
-    )
+    try:
+        cur = db.execute(
+            "INSERT INTO users (username, full_name, password_hash, role, api_token) VALUES (?, ?, ?, ?, ?)",
+            (neu.username, full_name, hash_passwort(neu.password), neu.role, token_hash(neues_token())),
+        )
+    except sqlite3.IntegrityError:
+        raise UngueltigeEingabe(
+            "Ungültige Eingabe", [{"feld": "username", "meldung": "Benutzername ist bereits vergeben"}]
+        ) from None
     db.commit()
-    print(f"[users] Neuer Benutzer {data['username']} ({full_name})")
+    print(f"[users] Neuer Benutzer {neu.username} ({full_name})")
     # Kein Token in der Antwort: Die Person holt sich ihr eigenes beim ersten Login.
-    return jsonify({"id": cur.lastrowid, "username": data["username"], "full_name": full_name}), 201
+    return jsonify({"id": cur.lastrowid, "username": neu.username, "full_name": full_name}), 201
 
 
 @app.errorhandler(Exception)
