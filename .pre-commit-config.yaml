@@ -1,0 +1,31 @@
+# Prüfungen vor jedem Commit. Einrichten (einmalig, in der aktivierten venv):
+#   python -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+#   pre-commit install
+# Alle Dateien prüfen: pre-commit run --all-files
+#
+# Externe Hooks sind per Commit-SHA gepinnt (Release-Tag im Kommentar),
+# scripts/check-pinning.sh prüft das in der CI.
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Bandit und mypy kommen aus requirements-dev.txt (gepinnt, mit Hashes),
+  # damit lokal dieselben Versionen laufen wie in der CI.
+  - repo: local
+    hooks:
+      - id: bandit
+        name: bandit (SAST)
+        entry: bandit -c pyproject.toml -q
+        language: system
+        types: [python]
+        exclude: ^tests/
+
+      - id: mypy
+        name: mypy (Type Checker)
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
